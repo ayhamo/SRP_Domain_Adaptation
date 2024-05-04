@@ -36,6 +36,7 @@ parser.add_argument('--device',                 default='cuda',                 
 args = parser.parse_args()
 
 if __name__ == "__main__":
+    # python main.py --experiment_description WISDM --run_description W_RAINCOAT --da_method RAINCOAT --dataset WISDM --backbone CNN --num_runs 1
     trainer = cross_domain_trainer(args)
     trainer.train()
     trainer.visualize()
