@@ -1,0 +1,12 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+
+experiments_logs/
+**/*.ipynb_checkpoints/
+env/
+*.py[cod]
+*.arff
+*.png
+*.pkl
+*.xlsx
+ 
