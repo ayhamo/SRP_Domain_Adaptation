@@ -1,10 +1,9 @@
 import torch
 import torch.nn as nn
-import numpy as np
 import torch.nn.functional as F
 from models.loss import SinkhornDistance
 from pytorch_metric_learning import losses
-from models.models import ResClassifier_MME, classifier
+from models.models import classifier
 
 class Algorithm(torch.nn.Module):
     """

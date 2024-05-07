@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 
-
+# TODO: All OVANet Method
 def jitter(x, sigma=0.8):
     # https://arxiv.org/pdf/1706.00527.pdf
     return x + torch.randn_like(x) * sigma

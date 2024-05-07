@@ -12,7 +12,7 @@ parser = argparse.ArgumentParser()
 
 # ========  Experiments Name ================
 parser.add_argument('--save_dir',               default='experiments_logs',         type=str, help='Directory containing all experiments')
-parser.add_argument('--experiment_description', default='WISDM-RAINCOAT-uni',               type=str, help='Name of your experiment (EEG, HAR, HHAR_SA, ')
+parser.add_argument('--experiment_description', default='WISDM-RAINCOAT-uni',               type=str, help='Name of your experiment (EEG, HAR, HHAR_SA')
 # ========= Select the DA methods ============
 parser.add_argument('--da_method',              default='RAINCOAT',               type=str, help='DANCE, RAINCOAT')
 # ========= Select the DATASET ==============
