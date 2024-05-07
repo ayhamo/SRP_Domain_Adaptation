@@ -2,13 +2,11 @@
 # pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 # pip install -r requirement.txt
 
-import os
 import argparse
 import warnings
 from trainers.trainer import cross_domain_trainer
 import sklearn.exceptions
 import pickle
-from sklearn.manifold import TSNE
 warnings.filterwarnings("ignore", category=sklearn.exceptions.UndefinedMetricWarning)
 
 parser = argparse.ArgumentParser()
@@ -20,7 +18,7 @@ parser.add_argument('--experiment_description', default='WISDM-RAINCOAT',       
 parser.add_argument('--run_description',        default='WISDM-RAINCOAT',                     type=str, help='name of your runs')
 
 # ========= Select the DA methods ============
-parser.add_argument('--da_method',              default='RAINCOAT',               type=str, help='DANN, Deep_Coral, RAINCOAT, MMDA, VADA, DIRT, CDAN, AdaMatch, HoMM, CoDATS')
+parser.add_argument('--da_method',              default='RAINCOAT',               type=str, help='RAINCOAT')
 
 # ========= Select the DATASET ==============
 parser.add_argument('--data_path',              default=r'./data',                  type=str, help='Path containing dataset')

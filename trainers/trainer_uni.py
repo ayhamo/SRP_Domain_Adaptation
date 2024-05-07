@@ -16,7 +16,7 @@ from sklearn.metrics import classification_report, accuracy_score
 from dataloader.uni_dataloader import data_generator
 from configs.data_model_configs import get_dataset_class
 from configs.hparams import get_hparams_class
-from algorithms.utils import fix_randomness, copy_Files, starting_logs, save_checkpoint, _calc_metrics, calculate_risk
+from algorithms.utils import fix_randomness, copy_Files, starting_logs, save_checkpoint, calculate_risk
 from algorithms.algorithms import get_algorithm_class
 from models.models import get_backbone_class
 from sklearn.metrics import f1_score

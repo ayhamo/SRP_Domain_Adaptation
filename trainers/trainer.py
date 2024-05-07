@@ -8,12 +8,11 @@ import sklearn.exceptions
 warnings.filterwarnings("ignore", category=sklearn.exceptions.UndefinedMetricWarning)
 import collections
 
-from sklearn.metrics import classification_report, accuracy_score
-from dataloader.dataloader import data_generator, few_shot_data_generator, generator_percentage_of_data
+from sklearn.metrics import accuracy_score
+from dataloader.dataloader import data_generator, few_shot_data_generator
 from configs.data_model_configs import get_dataset_class
 from configs.hparams import get_hparams_class
-from algorithms.utils import fix_randomness, copy_Files, starting_logs, save_checkpoint, _calc_metrics
-from algorithms.utils import calc_dev_risk, calculate_risk
+from algorithms.utils import fix_randomness, starting_logs
 from algorithms.algorithms import get_algorithm_class
 from algorithms.RAINCOAT import RAINCOAT
 from models.models import get_backbone_class

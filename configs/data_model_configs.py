@@ -17,6 +17,12 @@ class HAR():
         self.drop_last = True
         self.normalize = True
 
+        # CNN and RESNET features
+        
+        self.mid_channels = 64
+        self.final_out_channels = 128
+        self.features_len = 1
+
         # model configs
         self.input_channels = 9
         self.kernel_size = 5
@@ -24,12 +30,7 @@ class HAR():
         self.dropout = 0.5
         self.num_classes = 6
         self.fourier_modes = 64
-        self.out_dim = 192
-        # CNN and RESNET features
-        
-        self.mid_channels = 64
-        self.final_out_channels = 128
-        self.features_len = 1
+        self.out_dim = self.final_out_channels+ self.fourier_modes * 2
 
         # TCN features
         self.tcn_layers = [75, 150]
