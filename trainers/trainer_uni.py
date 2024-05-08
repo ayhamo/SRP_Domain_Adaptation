@@ -12,11 +12,11 @@ import copy
 import diptest
 from sklearn.cluster import KMeans
 from algorithms.RAINCOAT import RAINCOAT
-from sklearn.metrics import classification_report, accuracy_score
+from sklearn.metrics import accuracy_score
 from dataloader.uni_dataloader import data_generator
 from configs.data_model_configs import get_dataset_class
 from configs.hparams import get_hparams_class
-from algorithms.utils import fix_randomness, copy_Files, starting_logs, save_checkpoint, calculate_risk
+from algorithms.utils import fix_randomness, starting_logs
 from algorithms.algorithms import get_algorithm_class
 from models.models import get_backbone_class
 from sklearn.metrics import f1_score
@@ -37,7 +37,7 @@ class cross_domain_trainer(object):
         self.run_description = args.experiment_description
         self.experiment_description = args.experiment_description
 
-        self.best_acc = 0
+        self.best_f1 = 0
         # paths
         self.home_path = os.getcwd()
         self.save_dir = args.save_dir
@@ -81,7 +81,7 @@ class cross_domain_trainer(object):
                                                                    src_id, trg_id, run_id)
                 self.fpath = os.path.join(self.home_path, self.scenario_log_dir, 'backbone.pth')
                 self.cpath = os.path.join(self.home_path, self.scenario_log_dir, 'classifier.pth')
-                self.best_acc = 0
+                self.best_f1 = 0
                 # Load data
                 self.load_data(src_id, trg_id)
                 if self.da_method =='DANCE':

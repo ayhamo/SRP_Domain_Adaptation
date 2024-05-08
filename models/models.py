@@ -65,34 +65,6 @@ class classifier(nn.Module):
         predictions = self.logits(x)/self.tmp
         return predictions
 
-
-class ResClassifier_MME(nn.Module):
-    def __init__(self, configs):
-        super(ResClassifier_MME, self).__init__()
-        self.norm = True
-        self.tmp = 0.02
-        num_classes = configs.num_classes
-        input_size = configs.out_dim
-   
-        self.fc = nn.Linear(input_size, num_classes, bias=False)
-            
-    def set_lambda(self, lambd):
-        self.lambd = lambd
-
-    def forward(self, x, dropout=False, return_feat=False):
-        if return_feat:
-            return x
-        x = self.fc(x)/self.tmp
-        return x
-
-    def weight_norm(self):
-        w = self.fc.weight.data
-        norm = w.norm(p=2, dim=1, keepdim=True)
-        self.fc.weight.data = w.div(norm.expand_as(w))
-        
-    def weights_init(self):
-        self.fc.weight.data.normal_(0.0, 0.1)
-
 ########## TCN #############################
 torch.backends.cudnn.benchmark = True  # might be required to fasten TCN
 

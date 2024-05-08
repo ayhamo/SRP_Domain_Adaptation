@@ -27,43 +27,7 @@ class Algorithm(torch.nn.Module):
 
     def update(self, *args, **kwargs):
         raise NotImplementedError
-
-# TODO: CHECK 1
-class Lower_Upper_bounds(Algorithm):
-    """
-    Lower bound: train on source and test on target.
-    Upper bound: train on target and test on target.
-    """
-
-    def __init__(self, backbone_fe, configs, hparams, device):
-        super(Lower_Upper_bounds, self).__init__(configs)
-
-        self.feature_extractor = backbone_fe(configs)
-        self.classifier = classifier(configs)
-        self.network = nn.Sequential(self.feature_extractor, self.classifier)
-
-        self.optimizer = torch.optim.Adam(
-            self.network.parameters(),
-            lr=1e-3,
-            weight_decay=1e-4
-        )
-        self.hparams = hparams
-
-    def update(self, src_x, src_y):
-        src_feat = self.feature_extractor(src_x)
-        src_pred = self.classifier(src_feat)
-
-        src_cls_loss = self.cross_entropy(src_pred, src_y)
-
-        loss = src_cls_loss
-
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
-
-        return {'Src_cls_loss': src_cls_loss.item()}
-
-
+    
 class DANCE(Algorithm):
     """
     Universal Domain Adaptation through Self-Supervision
