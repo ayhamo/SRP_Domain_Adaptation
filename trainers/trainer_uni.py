@@ -204,7 +204,7 @@ class cross_domain_trainer(object):
             cc = diff[cat]
             if cc.shape[0]>3:
                 dip, pval = diptest.diptest(diff[cat])
-                print(i, dip)
+                #print(i, dip)
                 if dip < 0.05:
                     kmeans = KMeans(n_clusters=2, random_state=0,max_iter=5000, n_init=50, init="random").fit(diff[cat].reshape(-1, 1))
                     c = max(kmeans.cluster_centers_)
