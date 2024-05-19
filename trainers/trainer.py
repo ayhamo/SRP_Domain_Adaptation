@@ -148,14 +148,14 @@ class cross_domain_trainer(object):
 
                         algorithm.correct(src_x, src_y, trg_x)
 
-                acc, f1 = self.eval()
+                    acc, f1 = self.eval()
 
-                if f1 >= self.best_f1:
-                    self.best_f1 = f1
-                    self.logger.debug(f'[Epoch : {epoch}/{self.hparams["num_epochs"]}]')
-                    self.logger.debug(f"best f1: {self.best_f1}")
-                    torch.save(self.algorithm.feature_extractor.state_dict(), self.fpath)
-                    torch.save(self.algorithm.classifier.state_dict(), self.cpath)
+                    if f1 >= self.best_f1:
+                        self.best_f1 = f1
+                        self.logger.debug(f'[Epoch : {epoch}/{self.hparams["num_epochs"]}]')
+                        self.logger.debug(f"best f1: {self.best_f1}")
+                        torch.save(self.algorithm.feature_extractor.state_dict(), self.fpath)
+                        torch.save(self.algorithm.classifier.state_dict(), self.cpath)
 
                 acc, f1 = self.eval(final=True)
                 log = {"scenario": i, "run_id": run_id, "accuracy": acc, "f1": f1}
