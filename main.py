@@ -37,6 +37,7 @@ if __name__ == "__main__":
     # python main.py --experiment_description WISDM --run_description W_RAINCOAT --da_method RAINCOAT --dataset WISDM --backbone CNN --num_runs 1
     trainer = cross_domain_trainer(args)
     trainer.train()
+    
     trainer.visualize()
     dic = {'1':trainer.src_all_features,'2':trainer.src_true_labels,'3':trainer.trg_all_features,'4':trainer.trg_true_labels,'acc': trainer.trg_acc_list}
     with open('saved_dictionary2.pickle', 'wb') as handle:

@@ -14,9 +14,7 @@ from dataloader.dataloader import data_generator
 from configs.data_model_configs import get_dataset_class
 from configs.hparams import get_hparams_class
 from algorithms.utils import fix_randomness, starting_logs
-from algorithms.algorithms import get_algorithm_class
 from algorithms.RAINCOAT import RAINCOAT
-from models.models import get_backbone_class
 from algorithms.utils import AverageMeter
 from sklearn.metrics import f1_score
 
@@ -94,12 +92,9 @@ class cross_domain_trainer(object):
                     trg_id,
                     run_id,
                 )
-                self.fpath = os.path.join(
-                    self.home_path, self.scenario_log_dir, "backbone.pth"
-                )
-                self.cpath = os.path.join(
-                    self.home_path, self.scenario_log_dir, "classifier.pth"
-                )
+                self.fpath = os.path.join(self.home_path, self.scenario_log_dir, "backbone.pth")
+                self.cpath = os.path.join(self.home_path, self.scenario_log_dir, "classifier.pth")
+                
                 self.best_f1 = 0
                 # Load data
                 self.load_data(src_id, trg_id)
@@ -109,7 +104,7 @@ class cross_domain_trainer(object):
                 algorithm.to(self.device)
                 self.algorithm = algorithm
 
-                # Average meters
+                # TODO Add losses to graph
                 loss_avg_meters = collections.defaultdict(lambda: AverageMeter())
 
                 # training..
@@ -141,8 +136,7 @@ class cross_domain_trainer(object):
                         torch.save(self.algorithm.feature_extractor.state_dict(), self.fpath)
                         torch.save(self.algorithm.classifier.state_dict(), self.cpath)
 
-                #TODO Correction is inside num_run, not outside, check it out!
-                print("===== Correct ====")
+                self.logger.debug("===== Correct ====")
                 for epoch in range(1, self.hparams["num_epochs"] + 1):
                     joint_loaders = zip(self.src_train_dl, self.trg_train_dl)
                     algorithm.train()
@@ -156,7 +150,7 @@ class cross_domain_trainer(object):
 
                 acc, f1 = self.eval()
 
-                if f1 > self.best_f1:
+                if f1 >= self.best_f1:
                     self.best_f1 = f1
                     self.logger.debug(f'[Epoch : {epoch}/{self.hparams["num_epochs"]}]')
                     self.logger.debug(f"best f1: {self.best_f1}")
@@ -184,18 +178,21 @@ class cross_domain_trainer(object):
     def visualize(self):
         feature_extractor = self.algorithm.feature_extractor.to(self.device)
         feature_extractor.eval()
-        self.trg_pred_labels = np.array([])
-
+        
         self.trg_true_labels = np.array([])
         self.trg_all_features = []
+
         self.src_true_labels = np.array([])
         self.src_all_features = []
+
         with torch.no_grad():
+
             # for data, labels in self.trg_test_dl:
             for data, labels in self.trg_train_dl:
                 data = data.float().to(self.device)
                 labels = labels.view((-1)).long().to(self.device)
                 features, _ = feature_extractor(data)
+
                 self.trg_all_features.append(features.cpu().numpy())
                 self.trg_true_labels = np.append(
                     self.trg_true_labels, labels.data.cpu().numpy()
@@ -205,6 +202,7 @@ class cross_domain_trainer(object):
                 data = data.float().to(self.device)
                 labels = labels.view((-1)).long().to(self.device)
                 features, _ = feature_extractor(data)
+
                 self.src_all_features.append(features.cpu().numpy())
                 self.src_true_labels = np.append(
                     self.src_true_labels, labels.data.cpu().numpy()

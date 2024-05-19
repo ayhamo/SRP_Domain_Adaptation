@@ -1,10 +1,8 @@
-import os
 import argparse
 import warnings
 from trainers.trainer_uni import cross_domain_trainer
 import sklearn.exceptions
-import pickle
-from sklearn.manifold import TSNE
+
 warnings.filterwarnings("ignore", category=sklearn.exceptions.UndefinedMetricWarning)
 
 parser = argparse.ArgumentParser()

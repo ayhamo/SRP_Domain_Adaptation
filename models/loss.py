@@ -3,8 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-
-
 def ova_loss(out_open, label):
     assert len(out_open.size()) == 3
     assert out_open.size(1) == 2
@@ -104,7 +102,7 @@ class SinkhornDistance(nn.Module):
 
     def M(self, C, u, v):
         "Modified cost for logarithmic updates"
-        "$M_{ij} = (-c_{ij} + u_i + v_j) / \epsilon$"
+        "$M_{ij} = (-c_{ij} + u_i + v_j) / \epsilon"
        
         return (-C + u.unsqueeze(-1) + v.unsqueeze(-2)) / self.eps
 

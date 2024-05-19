@@ -8,9 +8,9 @@ def get_dataset_class(dataset_name):
 class HAR():
     def __init__(self):
         super(HAR, self)
-        self.scenarios = [("2", "11"), ("6", "23"),("7", "13"),("9", "18"),("12", "16"),\
-            ("13", "19"),  ("18", "21"), ("20", "6"),("23", "13"),("24", "12")]
-        # self.scenarios = [("24", "12")]
+        #self.scenarios = [("2", "11"), ("6", "23"),("7", "13"),("9", "18"),("12", "16"),\
+        #    ("13", "19"),  ("18", "21"), ("20", "6"),("23", "13"),("24", "12")]
+        self.scenarios = [("24", "12"), ("6","23")]
         self.class_names = ['walk', 'upstairs', 'downstairs', 'sit', 'stand', 'lie']
         self.sequence_len = 128
         self.shuffle = True
@@ -99,7 +99,7 @@ class WISDM(object):
         # Closed Set DA
         #self.scenarios = [("2", "32"), ("4", "15"),("7", "30"),('12','7'), ('12','19'),('18','20'),\
         #                  ('20','30'), ("21", "31"),("25", "29"), ('26','2')]
-        self.scenarios = [("2", "32"),("4", "15")]
+        self.scenarios = [("3", "2"),("3", "7")]
         self.num_classes = 6
         self.shuffle = True
         self.drop_last = False
@@ -144,7 +144,7 @@ class HHAR_SA(object):  ## HHAR dataset, SAMSUNG device.
     def __init__(self):
         super(HHAR_SA, self).__init__()
         self.sequence_len = 128
-        # self.scenarios = [("0", "2")]
+        #self.scenarios = [("0", "2"), ("2","4")]
         self.scenarios = [("0", "2"), ("1", "6"),("2", "4"),("4", "0"),("4", "5"),\
             ("5", "1"),("5", "2"),("7", "2"),("7", "5"),("8", "4")]
         self.class_names = ['bike', 'sit', 'stand', 'walk', 'stairs_up', 'stairs_down']
