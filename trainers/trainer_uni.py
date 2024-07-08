@@ -17,8 +17,6 @@ from dataloader.uni_dataloader import data_generator
 from configs.data_model_configs import get_dataset_class
 from configs.hparams import get_hparams_class
 from algorithms.utils import fix_randomness, starting_logs
-from algorithms.algorithms import get_algorithm_class
-from models.models import get_backbone_class
 from sklearn.metrics import f1_score
 torch.backends.cudnn.benchmark = True  
 from sklearn.mixture import GaussianMixture
@@ -74,11 +72,12 @@ class cross_domain_trainer(object):
             for run_id in range(self.num_runs):  # specify number of consecutive runs
                 # fixing random seed
                 fix_randomness(run_id)
+                print(f"doing ({src_id,trg_id})")
 
-                self.logger, self.scenario_log_dir = starting_logs(self.dataset, self.da_method, self.exp_log_dir,
-                                                                   src_id, trg_id, run_id)
-                self.fpath = os.path.join(self.home_path, self.scenario_log_dir, 'backbone.pth')
-                self.cpath = os.path.join(self.home_path, self.scenario_log_dir, 'classifier.pth')
+                #self.logger, self.scenario_log_dir = starting_logs(self.dataset, self.da_method, self.exp_log_dir,
+                #                                                   src_id, trg_id, run_id)
+                #self.fpath = os.path.join(self.home_path, self.scenario_log_dir, 'backbone.pth')
+                #self.cpath = os.path.join(self.home_path, self.scenario_log_dir, 'classifier.pth')
                 
                 self.best_f1 = 0
                 # Load data
@@ -105,12 +104,12 @@ class cross_domain_trainer(object):
                         algorithm.update(src_x, src_y, trg_x)
                     
                     # logging
-                    self.logger.debug(f'[Epoch : {epoch}/{self.hparams["num_epochs"]}]')
                     acc, f1, _ = self.evaluate_RAINCOAT(self.trg_test_dl.dataset.y_data)
 
                     if f1 > self.best_f1:
+                        #self.logger.debug(f'[Epoch : {epoch}/{self.hparams["num_epochs"]}]')
                         self.best_f1 = f1
-                        self.logger.debug(f"best f1: {self.best_f1}")
+                        #self.logger.debug(f"best f1: {self.best_f1}")
                         #torch.save(self.algorithm.feature_extractor.state_dict(), self.fpath)
                         #torch.save(self.algorithm.classifier.state_dict(), self.cpath)
                     
@@ -128,7 +127,16 @@ class cross_domain_trainer(object):
                                                 trg_x.float().to(self.device), trg_index.to(self.device)
                             
                         algorithm.correct(src_x, src_y, trg_x)
-                        acc, f1, H = self.evaluate_RAINCOAT(self.trg_test_dl.dataset.y_data)
+
+                    # logging
+                    acc, f1, _ = self.evaluate_RAINCOAT(self.trg_test_dl.dataset.y_data)
+
+                    if f1 > self.best_f1:
+                        #self.logger.debug(f'[Epoch : {epoch}/{self.hparams["num_epochs"]}]')
+                        self.best_f1 = f1
+                        #self.logger.debug(f"best f1: {self.best_f1}")
+                        #torch.save(self.algorithm.feature_extractor.state_dict(), self.fpath)
+                        #torch.save(self.algorithm.classifier.state_dict(), self.cpath)
 
                 dis2proto_c = self.calc_distance(size_ltrain, self.trg_train_dl)
                 dis2proto_c_test = self.calc_distance(size_ltest, self.trg_test_dl)
@@ -155,8 +163,8 @@ class cross_domain_trainer(object):
         new_row = pd.DataFrame([log])
         df_c = pd.concat([df_c, new_row], ignore_index=True)
         print(df_c)
-        #path = os.path.join(self.exp_log_dir, "average_correct.csv")
-        #df_c.to_csv(path, sep=",", index=False)
+        path = os.path.join(self.exp_log_dir, "average_correct.csv")
+        df_c.to_csv(path, sep=",", index=False)
 
     def preprocess_labels(self, source_loader, target_loader):
         trg_y= copy.deepcopy(target_loader.dataset.y_data)
@@ -179,12 +187,8 @@ class cross_domain_trainer(object):
             cc = diff[cat]
             if cc.shape[0]>3:
                 dip, pval = diptest.diptest(diff[cat])
-                if dip < 0.05:
+                if dip < 0.08:
                     print("contain private")
-                    # gm = GaussianMixture(n_components=2, random_state=0,max_iter=5000, n_init=50).fit(diff[cat].reshape(-1, 1))
-                    # c =  max(gm.means_)
-                    # kmeans = KMeans(n_clusters=2, random_state=0,max_iter=5000, n_init=50, init="random").fit(diff[cat].reshape(-1, 1))
-                    # c = max(kmeans.cluster_centers_)
                     c = c_list[i]
                     m1 = np.where(diff>c)
                     m2 = np.where(self.trg_pred_labels==i)
@@ -205,7 +209,7 @@ class cross_domain_trainer(object):
             if cc.shape[0]>3:
                 dip, pval = diptest.diptest(diff[cat])
                 #print(i, dip)
-                if dip < 0.05:
+                if dip < 0.08:
                     kmeans = KMeans(n_clusters=2, random_state=0,max_iter=5000, n_init=50, init="random").fit(diff[cat].reshape(-1, 1))
                     c = max(kmeans.cluster_centers_)
                 else:
@@ -268,8 +272,8 @@ class cross_domain_trainer(object):
         class_c = np.where(self.trg_true_labels!=-1)
         class_p = np.where(self.trg_true_labels==-1)
 
-        
         label_c, pred_c = self.trg_true_labels[class_c], self.trg_pred_labels[class_c]
+        # we need here the full thruth, not the masked one
         label_p, pred_p = self.trg_true_labels[class_p], self.trg_pred_labels[class_p]
 
         acc_c = accuracy_score(label_c, pred_c)

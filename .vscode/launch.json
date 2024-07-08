@@ -1,0 +1,30 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: main_uni.py",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/main_uni.py",
+            "args": [
+                "--experiment_description",
+                "WISDM-RAINCOAT-uni",
+                "--da_method",
+                "RAINCOAT",
+                "--dataset",
+                "WISDM",
+                "--backbone",
+                "CNN",
+                "--num_runs",
+                "1"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Python Debugger: Python File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}"
+        }
+    ]
+}
