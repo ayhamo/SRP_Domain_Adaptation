@@ -138,6 +138,8 @@ class cross_domain_trainer(object):
                         #torch.save(self.algorithm.feature_extractor.state_dict(), self.fpath)
                         #torch.save(self.algorithm.classifier.state_dict(), self.cpath)
 
+                # The issue of H score starts here, where c list would be empty
+                # There is also the issue of calc_distance before and after being the same
                 dis2proto_c = self.calc_distance(size_ltrain, self.trg_train_dl)
                 dis2proto_c_test = self.calc_distance(size_ltest, self.trg_test_dl)
                 c_list = self.learn_t(dis2proto_a, dis2proto_c)
@@ -187,7 +189,7 @@ class cross_domain_trainer(object):
             cc = diff[cat]
             if cc.shape[0]>3:
                 dip, pval = diptest.diptest(diff[cat])
-                if dip < 0.08:
+                if dip < 0.05:
                     print("contain private")
                     c = c_list[i]
                     m1 = np.where(diff>c)
@@ -209,7 +211,8 @@ class cross_domain_trainer(object):
             if cc.shape[0]>3:
                 dip, pval = diptest.diptest(diff[cat])
                 #print(i, dip)
-                if dip < 0.08:
+                #TODO This dip test is important since it's the reason we are failing H scores , 0.08 works
+                if dip < 0.05:
                     kmeans = KMeans(n_clusters=2, random_state=0,max_iter=5000, n_init=50, init="random").fit(diff[cat].reshape(-1, 1))
                     c = max(kmeans.cluster_centers_)
                 else:
