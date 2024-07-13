@@ -69,15 +69,3 @@ def starting_logs(data_type, da_method, exp_log_dir, src_id, tgt_id, run_id):
     logger.debug(f'Run ID: {run_id}')
     logger.debug("=" * 45)
     return logger, log_dir
-
-
-def weights_init(m):
-    classname = m.__class__.__name__
-    if classname.find('Conv') != -1:
-        m.weight.data.normal_(0.0, 0.02)
-    elif classname.find('BatchNorm') != -1:
-        m.weight.data.normal_(1.0, 0.02)
-        m.bias.data.fill_(0)
-    elif classname.find('Linear') != -1:
-        m.weight.data.normal_(0.0, 0.1)
-        m.bias.data.fill_(0)

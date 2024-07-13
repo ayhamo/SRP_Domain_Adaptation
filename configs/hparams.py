@@ -46,7 +46,6 @@ class WISDM():
         }
         self.alg_hparams = {
             'RAINCOAT':       {'learning_rate':1e-3,     'src_cls_loss_wt': 0.5,    'domain_loss_wt': 0.5},
-            "DANCE":        {'learning_rate': 1e-3,    'momentum': 0.5, 'eta': 0.05, "thr": 1.71,   "margin": 0.5, 'temp': 0.05}
         }
 
 
