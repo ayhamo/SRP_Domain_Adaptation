@@ -49,7 +49,8 @@ class cross_domain_trainer(object):
         self.dataset_configs, self.hparams_class = self.get_configs()
 
         # to fix dimension of features in classifier and discriminator networks.
-        self.dataset_configs.final_out_channels = self.dataset_configs.tcn_final_out_channles if args.backbone == "TCN" else self.dataset_configs.final_out_channels
+        self.dataset_configs.final_out_channels = self.dataset_configs.final_out_channels
+
 
         # Specify number of hparams
         self.default_hparams = {**self.hparams_class.alg_hparams[self.da_method],

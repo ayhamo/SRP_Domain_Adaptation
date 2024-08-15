@@ -23,20 +23,14 @@ warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
 
 
 class cross_domain_trainer(object):
-    """
-    This class contain the main training functions for our AdAtime
-    """
 
     def __init__(self, args):
-        self.da_method = args.da_method  # Selected  DA Method
         self.dataset = args.dataset  # Selected  Dataset
-        self.backbone = args.backbone
         self.device = torch.device(args.device)  # device
-
-        self.run_description = args.run_description
         self.experiment_description = args.experiment_description
 
         self.best_f1 = 0
+
         # paths
         self.home_path = os.getcwd()
         self.save_dir = args.save_dir
@@ -50,24 +44,23 @@ class cross_domain_trainer(object):
         self.dataset_configs, self.hparams_class = self.get_configs()
 
         # to fix dimension of features in classifier and discriminator networks.
-        # self.dataset_configs.final_out_channels = self.dataset_configs.tcn_final_out_channles if args.backbone == "TCN" else self.dataset_configs.final_out_channels
         self.dataset_configs.final_out_channels = (
             self.dataset_configs.final_out_channels
         )
 
         # Specify number of hparams
         self.default_hparams = {
-            **self.hparams_class.alg_hparams[self.da_method],
+            **self.hparams_class.alg_hparams["RAINCOAT"],
             **self.hparams_class.train_params,
         }
 
     def train(self):
 
-        run_name = f"{self.run_description}"
         self.hparams = self.default_hparams
+
         # Logging
         self.exp_log_dir = os.path.join(
-            self.save_dir, self.experiment_description, run_name
+            self.save_dir, f"{self.experiment_description} run", self.experiment_description
         )
         os.makedirs(self.exp_log_dir, exist_ok=True)
 
@@ -86,7 +79,7 @@ class cross_domain_trainer(object):
                 # Logging
                 self.logger, self.scenario_log_dir = starting_logs(
                     self.dataset,
-                    self.da_method,
+                    "RAINCOAT",
                     self.exp_log_dir,
                     src_id,
                     trg_id,
@@ -96,6 +89,7 @@ class cross_domain_trainer(object):
                 self.cpath = os.path.join(self.home_path, self.scenario_log_dir, "classifier.pth")
                 
                 self.best_f1 = 0
+
                 # Load data
                 self.load_data(src_id, trg_id)
 
@@ -105,7 +99,7 @@ class cross_domain_trainer(object):
                 self.algorithm = algorithm
 
                 # TODO Add losses to graph
-                loss_avg_meters = collections.defaultdict(lambda: AverageMeter())
+                #loss_avg_meters = collections.defaultdict(lambda: AverageMeter())
 
                 # training..
                 for epoch in range(1, self.hparams["num_epochs"] + 1):
@@ -123,16 +117,18 @@ class cross_domain_trainer(object):
 
                         losses = algorithm.update(src_x, src_y, trg_x)
 
-                        for key, val in losses.items():
-                            loss_avg_meters[key].update(val, src_x.size(0))
+                        #for key, val in losses.items():
+                        #    loss_avg_meters[key].update(val, src_x.size(0))
 
-                    # logging
-                    self.logger.debug(f'[Epoch : {epoch}/{self.hparams["num_epochs"]}]')
                     acc, f1 = self.eval()
 
                     if f1 > self.best_f1:
+                        # logging
+                        self.logger.debug(f'[Epoch : {epoch}/{self.hparams["num_epochs"]}]')
+
                         self.best_f1 = f1
                         self.logger.debug(f"best f1: {self.best_f1}")
+
                         torch.save(self.algorithm.feature_extractor.state_dict(), self.fpath)
                         torch.save(self.algorithm.classifier.state_dict(), self.cpath)
 
@@ -140,6 +136,7 @@ class cross_domain_trainer(object):
                 for epoch in range(1, self.hparams["num_epochs"] + 1):
                     joint_loaders = zip(self.src_train_dl, self.trg_train_dl)
                     algorithm.train()
+
                     for (src_x, src_y), (trg_x, _) in joint_loaders:
                         src_x, src_y, trg_x = (
                         src_x.float().to(self.device),
@@ -151,8 +148,8 @@ class cross_domain_trainer(object):
                     acc, f1 = self.eval()
 
                     if f1 >= self.best_f1:
-                        self.best_f1 = f1
                         self.logger.debug(f'[Epoch : {epoch}/{self.hparams["num_epochs"]}]')
+                        self.best_f1 = f1
                         self.logger.debug(f"best f1: {self.best_f1}")
                         torch.save(self.algorithm.feature_extractor.state_dict(), self.fpath)
                         torch.save(self.algorithm.classifier.state_dict(), self.cpath)
@@ -213,6 +210,7 @@ class cross_domain_trainer(object):
     def eval(self, final=False):
         feature_extractor = self.algorithm.feature_extractor.to(self.device)
         classifier = self.algorithm.classifier.to(self.device)
+        
         if final == True:
             feature_extractor.load_state_dict(torch.load(self.fpath))
             classifier.load_state_dict(torch.load(self.cpath))
@@ -246,6 +244,7 @@ class cross_domain_trainer(object):
                 self.trg_true_labels = np.append(
                     self.trg_true_labels, labels.data.cpu().numpy()
                 )
+
         accuracy = accuracy_score(self.trg_true_labels, self.trg_pred_labels)
         f1 = f1_score(
             self.trg_pred_labels, self.trg_true_labels, pos_label=None, average="macro"

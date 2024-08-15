@@ -3,13 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from models.loss import SinkhornDistance
 from pytorch_metric_learning import losses
-from models.models import classifier
 
 class Algorithm(torch.nn.Module):
-    """
-    A subclass of Algorithm implements a domain adaptation algorithm.
-    Subclasses should implement the update() method.
-    """
 
     def __init__(self, configs):
         super(Algorithm, self).__init__()
@@ -54,10 +49,7 @@ class SpectralConv1d(nn.Module):
 class CNN(nn.Module):
     def __init__(self, configs):
         super(CNN, self).__init__()
-        self.width = configs.input_channels
-        self.channel = configs.input_channels
-        self.fl =   configs.sequence_len
-        self.fc0 = nn.Linear(self.channel, self.width) # input channel is 2: (a(x), x)
+
         self.conv_block1 = nn.Sequential(
             nn.Conv1d(configs.input_channels, configs.mid_channels, kernel_size=configs.kernel_size,
                       stride=configs.stride, bias=False, padding=(configs.kernel_size // 2)),
@@ -86,6 +78,8 @@ class CNN(nn.Module):
         
     def forward(self, x):
         x = self.conv_block1(x)
+        #TODO THIS WAS ADDED FROM MODELS.PY , WHY IT WAS NOT HERE?
+        x = self.conv_block2(x)
         x = self.conv_block3(x)
         x = self.adaptive_pool(x)
         x_flat = x.reshape(x.shape[0], -1)
@@ -97,6 +91,7 @@ class tf_encoder(nn.Module):
         self.modes1 = configs.fourier_modes   # Number of low-frequency modes to keep
         self.width = configs.input_channels
         self.length =  configs.sequence_len
+
         self.freq_feature = SpectralConv1d(self.width, self.width, self.modes1,self.length)  # Frequency Feature Encoder
         self.bn_freq = nn.BatchNorm1d(configs.fourier_modes*2)   # It doubles because frequency features contain both amplitude and phase
         self.cnn = CNN(configs).to('cuda')  # Time Feature Encoder
@@ -126,7 +121,17 @@ class tf_decoder(nn.Module):
         x_high = F.relu(self.bn2(self.convT(et.unsqueeze(2)).permute(0,2,1))) # reconstruct time series by using time features for high frequency patterns. 
         return x_low + x_high
 
+class classifier(nn.Module):
+    def __init__(self, configs):
+        super(classifier, self).__init__()
+        model_output_dim = configs.out_dim 
+        self.logits = nn.Linear(model_output_dim, configs.num_classes, bias=False)
+        self.tmp= 0.1
 
+    def forward(self, x):
+        predictions = self.logits(x)/self.tmp
+        return predictions
+    
 class RAINCOAT(Algorithm):
     def __init__(self, configs, hparams, device):
         super(RAINCOAT, self).__init__(configs)
@@ -155,6 +160,7 @@ class RAINCOAT(Algorithm):
         
     def update(self, src_x, src_y, trg_x):
         self.optimizer.zero_grad()
+
         # Encode both source and target features via our time-frequency feature encoder
         src_feat, out_s = self.feature_extractor(src_x)   
         trg_feat, out_t = self.feature_extractor(trg_x)
@@ -164,24 +170,42 @@ class RAINCOAT(Algorithm):
         # Compute reconstruction loss 
         recons = 1e-4 * (self.recons(src_recon, src_x) + self.recons(trg_recon, trg_x))
         recons.backward(retain_graph=True)
+
         # Compute alignment loss
         dr, _, _ = self.sink(src_feat, trg_feat)
         sink_loss = dr
         sink_loss.backward(retain_graph=True)
+
         # Compute classification loss
         src_pred = self.classifier(src_feat)
         loss_cls = self.cross_entropy(src_pred, src_y) 
         loss_cls.backward(retain_graph=True)
+        
+        # Compute weights
+        a, b, c = 1, 1, 0.2
+        total = a + b + c
+        lambda1 = a / total
+        lambda2 = b / total
+        lambda3 = c / total
+
+        # Compute total loss with weights
+        total_loss = lambda1 * recons + lambda2 * sink_loss + lambda3 * loss_cls
         self.optimizer.step()
-        return {'Src_cls_loss': loss_cls.item(),'Sink': sink_loss.item()}
-    
+
+        return {'Total_loss': total_loss.item()}
+
+
     def correct(self,src_x, src_y, trg_x):
         self.coptimizer.zero_grad()
+
         src_feat, out_s = self.feature_extractor(src_x)
         trg_feat, out_t = self.feature_extractor(trg_x)
+
         src_recon = self.decoder(src_feat, out_s)
         trg_recon = self.decoder(trg_feat, out_t)
+
         recons = 1e-4 * (self.recons(trg_recon, trg_x) + self.recons(src_recon, src_x))
         recons.backward()
         self.coptimizer.step()
+        
         return {'recon': recons.item()}
