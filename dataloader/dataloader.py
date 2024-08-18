@@ -2,8 +2,6 @@ import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
 
-from sklearn.model_selection import train_test_split
-
 import os
 import numpy as np
 import random

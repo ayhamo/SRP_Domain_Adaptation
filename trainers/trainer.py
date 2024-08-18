@@ -50,7 +50,7 @@ class cross_domain_trainer(object):
 
         # Specify number of hparams
         self.default_hparams = {
-            **self.hparams_class.alg_hparams["RAINCOAT"],
+            **self.hparams_class.alg_hparams,
             **self.hparams_class.train_params,
         }
 
@@ -59,9 +59,7 @@ class cross_domain_trainer(object):
         self.hparams = self.default_hparams
 
         # Logging
-        self.exp_log_dir = os.path.join(
-            self.save_dir, f"{self.experiment_description} run", self.experiment_description
-        )
+        self.exp_log_dir = os.path.join(self.save_dir, f"RAINCOAT ClosedSet", self.experiment_description)
         os.makedirs(self.exp_log_dir, exist_ok=True)
 
         scenarios = (

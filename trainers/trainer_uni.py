@@ -23,13 +23,9 @@ from sklearn.mixture import GaussianMixture
 warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning)        
 
 class cross_domain_trainer(object):
-    """
-   This class contain the main training functions for our AdAtime
-    """
+
     def __init__(self, args):
-        self.da_method = args.da_method  # Selected  DA Method
         self.dataset = args.dataset  # Selected  Dataset
-        self.backbone = args.backbone
         self.device = torch.device(args.device)  # device
 
         self.run_description = args.experiment_description
@@ -53,19 +49,19 @@ class cross_domain_trainer(object):
 
 
         # Specify number of hparams
-        self.default_hparams = {**self.hparams_class.alg_hparams[self.da_method],
+        self.default_hparams = {**self.hparams_class.alg_hparams,
                                 **self.hparams_class.train_params}
 
 
     def train(self):
 
-        run_name = f"{self.run_description}"
         self.hparams = self.default_hparams
+
         # Logging
-        self.exp_log_dir = os.path.join(self.save_dir, self.experiment_description, run_name)
+        self.exp_log_dir = os.path.join(self.save_dir, "RAINCOAT UNIDA", self.experiment_description)
         os.makedirs(self.exp_log_dir, exist_ok=True)
 
-        scenarios = self.dataset_configs.scenarios  # return the scenarios given a specific dataset.
+        scenarios = self.dataset_configs.H_scenarios  # return the scenarios given a specific dataset.
         df_c = pd.DataFrame(columns=['scenario','run_id','accuracy','f1','H-score'])
         for i in scenarios:
             src_id = i[0]
@@ -73,10 +69,9 @@ class cross_domain_trainer(object):
             for run_id in range(self.num_runs):  # specify number of consecutive runs
                 # fixing random seed
                 fix_randomness(run_id)
-                print(f"doing ({src_id,trg_id})")
 
-                #self.logger, self.scenario_log_dir = starting_logs(self.dataset, self.da_method, self.exp_log_dir,
-                #                                                   src_id, trg_id, run_id)
+                self.logger, self.scenario_log_dir = starting_logs(self.dataset, "RAINCOAT", self.exp_log_dir,
+                                                                   src_id, trg_id, run_id)
                 #self.fpath = os.path.join(self.home_path, self.scenario_log_dir, 'backbone.pth')
                 #self.cpath = os.path.join(self.home_path, self.scenario_log_dir, 'classifier.pth')
                 
@@ -108,9 +103,9 @@ class cross_domain_trainer(object):
                     acc, f1, _ = self.evaluate_RAINCOAT(self.trg_test_dl.dataset.y_data)
 
                     if f1 > self.best_f1:
-                        #self.logger.debug(f'[Epoch : {epoch}/{self.hparams["num_epochs"]}]')
+                        self.logger.debug(f'[Epoch : {epoch}/{self.hparams["num_epochs"]}]')
                         self.best_f1 = f1
-                        #self.logger.debug(f"best f1: {self.best_f1}")
+                        self.logger.debug(f"best f1: {self.best_f1}")
                         #torch.save(self.algorithm.feature_extractor.state_dict(), self.fpath)
                         #torch.save(self.algorithm.classifier.state_dict(), self.cpath)
                     
@@ -133,9 +128,9 @@ class cross_domain_trainer(object):
                     acc, f1, _ = self.evaluate_RAINCOAT(self.trg_test_dl.dataset.y_data)
 
                     if f1 > self.best_f1:
-                        #self.logger.debug(f'[Epoch : {epoch}/{self.hparams["num_epochs"]}]')
+                        self.logger.debug(f'[Epoch : {epoch}/{self.hparams["num_epochs"]}]')
                         self.best_f1 = f1
-                        #self.logger.debug(f"best f1: {self.best_f1}")
+                        self.logger.debug(f"best f1: {self.best_f1}")
                         #torch.save(self.algorithm.feature_extractor.state_dict(), self.fpath)
                         #torch.save(self.algorithm.classifier.state_dict(), self.cpath)
 
@@ -165,7 +160,6 @@ class cross_domain_trainer(object):
 
         new_row = pd.DataFrame([log])
         df_c = pd.concat([df_c, new_row], ignore_index=True)
-        print(df_c)
         path = os.path.join(self.exp_log_dir, "average_correct.csv")
         df_c.to_csv(path, sep=",", index=False)
 
@@ -277,14 +271,11 @@ class cross_domain_trainer(object):
         class_p = np.where(self.trg_true_labels==-1)
 
         label_c, pred_c = self.trg_true_labels[class_c], self.trg_pred_labels[class_c]
-        # we need here the full thruth, not the masked one
         label_p, pred_p = self.trg_true_labels[class_p], self.trg_pred_labels[class_p]
 
         acc_c = accuracy_score(label_c, pred_c)
         acc_p = accuracy_score(label_p, pred_p)
-        #print("accuracy of both: ",acc_c, acc_p)
         if acc_c ==0 or acc_p==0:
-            #print("acc_C or acc_p is 0")
             H = 0
         else:
             H = 2*acc_c * acc_p/(acc_p+acc_c)
