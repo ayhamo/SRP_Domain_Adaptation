@@ -7,7 +7,6 @@ import warnings
 import sklearn.exceptions
 
 warnings.filterwarnings("ignore", category=sklearn.exceptions.UndefinedMetricWarning)
-import collections
 
 from sklearn.metrics import accuracy_score
 from dataloader.dataloader import data_generator
@@ -15,7 +14,6 @@ from configs.data_model_configs import get_dataset_class
 from configs.hparams import get_hparams_class
 from algorithms.utils import fix_randomness, starting_logs
 from algorithms.RAINCOAT import RAINCOAT
-from algorithms.utils import AverageMeter
 from sklearn.metrics import f1_score
 
 torch.backends.cudnn.benchmark = True
@@ -66,7 +64,9 @@ class cross_domain_trainer(object):
             self.dataset_configs.scenarios
         )  # return the scenarios given a specific dataset.
         df_a = pd.DataFrame(columns=["scenario", "run_id", "accuracy", "f1", "H-score"])
+
         self.trg_acc_list = []
+
         for i in scenarios:
             src_id = i[0]
             trg_id = i[1]
@@ -96,9 +96,10 @@ class cross_domain_trainer(object):
                 algorithm.to(self.device)
                 self.algorithm = algorithm
 
-                # TODO Add losses to graph
-                #loss_avg_meters = collections.defaultdict(lambda: AverageMeter())
-
+                # variables to save best model
+                best_feature_extractor_state = None
+                best_classifier_state = None
+                
                 # training..
                 for epoch in range(1, self.hparams["num_epochs"] + 1):
                     joint_loaders = zip(self.src_train_dl, self.trg_train_dl)
@@ -113,12 +114,10 @@ class cross_domain_trainer(object):
                             trg_x.float().to(self.device),
                         )
 
-                        losses = algorithm.update(src_x, src_y, trg_x)
+                        losses = algorithm.align(src_x, src_y, trg_x)
 
-                        #for key, val in losses.items():
-                        #    loss_avg_meters[key].update(val, src_x.size(0))
-
-                    acc, f1 = self.eval()
+                    # eval on validatopn
+                    acc, f1 = self.eval(self.trg_val_dl)
 
                     if f1 > self.best_f1:
                         # logging
@@ -127,8 +126,8 @@ class cross_domain_trainer(object):
                         self.best_f1 = f1
                         self.logger.debug(f"best f1: {self.best_f1}")
 
-                        torch.save(self.algorithm.feature_extractor.state_dict(), self.fpath)
-                        torch.save(self.algorithm.classifier.state_dict(), self.cpath)
+                        best_feature_extractor_state = self.algorithm.feature_extractor.state_dict()
+                        best_classifier_state = self.algorithm.classifier.state_dict()
 
                 self.logger.debug("===== Correct ====")
                 for epoch in range(1, self.hparams["num_epochs"] + 1):
@@ -143,16 +142,27 @@ class cross_domain_trainer(object):
 
                         algorithm.correct(src_x, src_y, trg_x)
 
-                    acc, f1 = self.eval()
+                        correct_losses = algorithm.correct(src_x, src_y, trg_x)
+
+                    acc, f1 = self.eval(self.trg_val_dl)
 
                     if f1 >= self.best_f1:
                         self.logger.debug(f'[Epoch : {epoch}/{self.hparams["num_epochs"]}]')
                         self.best_f1 = f1
                         self.logger.debug(f"best f1: {self.best_f1}")
-                        torch.save(self.algorithm.feature_extractor.state_dict(), self.fpath)
-                        torch.save(self.algorithm.classifier.state_dict(), self.cpath)
+                        best_feature_extractor_state = self.algorithm.feature_extractor.state_dict()
+                        best_classifier_state = self.algorithm.classifier.state_dict()
+                
+                # to save file only once, not at each best f1
+                torch.save(best_feature_extractor_state, self.fpath)
+                torch.save(best_classifier_state, self.cpath)
+                
+                # at final eval, we use test now
+                acc, f1 = self.eval(self.trg_test_dl, final=True)
 
-                acc, f1 = self.eval(final=True)
+                # final acc on test for visulize?
+                self.trg_acc_list.append(acc)
+                
                 log = {"scenario": i, "run_id": run_id, "accuracy": acc, "f1": f1}
                 new_row = pd.DataFrame([log])
                 df_a = pd.concat([df_a, new_row], ignore_index=True)
@@ -205,7 +215,7 @@ class cross_domain_trainer(object):
             self.src_all_features = np.vstack(self.src_all_features)
             self.trg_all_features = np.vstack(self.trg_all_features)
 
-    def eval(self, final=False):
+    def eval(self, dataloader, final=False):
         feature_extractor = self.algorithm.feature_extractor.to(self.device)
         classifier = self.algorithm.classifier.to(self.device)
         
@@ -221,7 +231,8 @@ class cross_domain_trainer(object):
         self.trg_true_labels = np.array([])
 
         with torch.no_grad():
-            for data, labels in self.trg_test_dl:
+            # now using datalaoder instead of only test
+            for data, labels in dataloader:
                 data = data.float().to(self.device)
                 labels = labels.view((-1)).long().to(self.device)
 
@@ -254,13 +265,12 @@ class cross_domain_trainer(object):
         hparams_class = get_hparams_class(self.dataset)
         return dataset_class(), hparams_class()
 
-    def load_data(self, src_id, trg_id):
-        self.src_train_dl, self.src_test_dl = data_generator(
-            self.data_path, src_id, self.dataset_configs, self.hparams
-        )
-        self.trg_train_dl, self.trg_test_dl = data_generator(
-            self.data_path, trg_id, self.dataset_configs, self.hparams
-        )
+    def load_data(self, src_id, trg_id): 
+        self.src_train_dl, self.src_val_dl, self.src_test_dl = data_generator(
+                self.data_path, src_id, self.dataset_configs, self.hparams)
+        self.trg_train_dl, self.trg_val_dl, self.trg_test_dl = data_generator(
+                self.data_path, trg_id, self.dataset_configs, self.hparams)
+        
 
     def create_save_dir(self):
         if not os.path.exists(self.save_dir):

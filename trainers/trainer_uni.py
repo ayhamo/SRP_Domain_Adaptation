@@ -97,7 +97,7 @@ class cross_domain_trainer(object):
                         src_x, src_y, trg_x, trg_index = src_x.float().to(self.device), src_y.long().to(self.device), \
                                               trg_x.float().to(self.device), trg_index.to(self.device)
                         
-                        algorithm.update(src_x, src_y, trg_x)
+                        algorithm.align(src_x, src_y, trg_x)
                     
                     # logging
                     acc, f1, _ = self.evaluate_RAINCOAT(self.trg_test_dl.dataset.y_data)
