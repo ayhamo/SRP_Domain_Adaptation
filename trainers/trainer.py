@@ -48,7 +48,6 @@ class cross_domain_trainer(object):
 
         # Specify number of hparams
         self.default_hparams = {
-            **self.hparams_class.alg_hparams,
             **self.hparams_class.train_params,
         }
 

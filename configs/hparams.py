@@ -46,12 +46,7 @@ class WISDM():
                 'num_epochs': 50,
                 'batch_size': 64,
                 'weight_decay': 1e-4,
-
-        }
-        self.alg_hparams = {
-            'learning_rate':1e-3,     
-            'src_cls_loss_wt': 0.5,    
-            'domain_loss_wt': 0.5
+                'learning_rate':1e-3,     
         }
 
 

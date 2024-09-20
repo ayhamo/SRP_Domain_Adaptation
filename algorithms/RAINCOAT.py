@@ -15,6 +15,17 @@ class Algorithm(torch.nn.Module):
     def update(self, *args, **kwargs):
         raise NotImplementedError
 
+# Fractional Fourier Transform, better perfomance
+# http://yoksis.bilkent.edu.tr/pdf/files/16189.pdf
+def frft(x, a):
+    N = x.shape[-1]
+    k = torch.arange(N, device=x.device)
+    exp_term = torch.exp(-1j * torch.pi * a * k**2 / N)
+    x = x * exp_term
+    x_ft = torch.fft.fft(x)
+    x_ft = x_ft * exp_term
+    return torch.fft.ifft(x_ft)
+
 class SpectralConv1d(nn.Module):
     def __init__(self, in_channels, out_channels, modes1, fl=128):
         super(SpectralConv1d, self).__init__()
@@ -37,14 +48,16 @@ class SpectralConv1d(nn.Module):
 
     def forward(self, x):
         batchsize = x.shape[0]
-        #Compute Fourier coeffcients up to factor of e^(- something constant)
+        # Compute FrFT coefficients (only part that changed in the code)
         x = torch.cos(x)
-        x_ft = torch.fft.rfft(x,norm='ortho')
-        out_ft = torch.zeros(batchsize, self.out_channels, x.size(-1)//2 + 1,  device=x.device, dtype=torch.cfloat)
-        out_ft[:, :, :self.modes1] = self.compl_mul1d(x_ft[:, :, :self.modes1], self.weights1)
-        r = out_ft[:, :, :self.modes1].abs()
-        p = out_ft[:, :, :self.modes1].angle()
-        return torch.concat([r,p],-1), out_ft
+
+        # a value (0.8) is a hyper paramter, grid search gave it as best
+        x_frft = frft(x, 0.8)
+        out_frft = torch.zeros(batchsize, self.out_channels, x.size(-1), device=x.device, dtype=torch.cfloat)
+        out_frft[:, :, :self.modes1] = self.compl_mul1d(x_frft[:, :, :self.modes1], self.weights1)
+        r = out_frft[:, :, :self.modes1].abs()
+        p = out_frft[:, :, :self.modes1].angle()
+        return torch.concat([r, p], -1), out_frft
 
 
 class CNN(nn.Module):
@@ -55,34 +68,44 @@ class CNN(nn.Module):
             nn.Conv1d(configs.input_channels, configs.mid_channels, kernel_size=configs.kernel_size,
                       stride=configs.stride, bias=False, padding=(configs.kernel_size // 2)),
             nn.BatchNorm1d(configs.mid_channels),
-            nn.ReLU(),
-            nn.MaxPool1d(kernel_size=2, stride=2, padding=1),
+            nn.Mish(),
+            nn.AdaptiveAvgPool1d(configs.features_len),
             nn.Dropout(configs.dropout)
         )
 
         self.conv_block2 = nn.Sequential(
-            nn.Conv1d(configs.mid_channels, configs.mid_channels , kernel_size=8, stride=1, bias=False, padding=4),
-            nn.BatchNorm1d(configs.mid_channels),
-            nn.ReLU(),
-            nn.MaxPool1d(kernel_size=2, stride=2, padding=1)
+            nn.Conv1d(configs.mid_channels, configs.mid_channels*2, kernel_size=8, stride=1, bias=False, padding=4),
+            nn.BatchNorm1d(configs.mid_channels*2),
+            nn.Mish(),
+            nn.MaxPool1d(kernel_size=2, stride=2, padding=1),
         )
 
         self.conv_block3 = nn.Sequential(
-            nn.Conv1d(configs.mid_channels , configs.final_out_channels, kernel_size=8, stride=1, bias=False,
-                      padding=4),
+            nn.Conv1d(configs.mid_channels*2, configs.mid_channels*2, kernel_size=8, stride=1, bias=False, padding=4),
+            nn.BatchNorm1d(configs.mid_channels*2),
+            nn.Mish(),
+            nn.AdaptiveAvgPool1d(configs.features_len),
+        )
+
+        # New convolutional block that reduces channels back to final_out_channels
+        self.conv_block4 = nn.Sequential(
+            nn.Conv1d(configs.mid_channels*2, configs.final_out_channels, kernel_size=8, stride=1, bias=False, padding=4),
             nn.BatchNorm1d(configs.final_out_channels),
-            nn.ReLU(),
+            nn.Mish(),
             nn.MaxPool1d(kernel_size=2, stride=2, padding=1),
         )
+
         self.adaptive_pool = nn.AdaptiveAvgPool1d(configs.features_len)
 
 
     def forward(self, x):
         x = self.conv_block1(x)
-        # added from models.py (missing layers)
         x = self.conv_block2(x)
         x = self.conv_block3(x)
+        x = self.conv_block4(x)
+        
         x = self.adaptive_pool(x)
+
         x_flat = x.reshape(x.shape[0], -1)
         return x_flat
 
@@ -116,10 +139,18 @@ class tf_decoder(nn.Module):
         self.convT = torch.nn.ConvTranspose1d(configs.final_out_channels, self.sequence_len, self.input_channels, stride=1)
         self.modes = configs.fourier_modes
 
+        self.channel_proj = nn.Conv1d(2 * self.input_channels, self.input_channels, kernel_size=1)
+
     def forward(self, f, out_ft):
-        x_low = self.bn1(torch.fft.irfft(out_ft, n=128))   # reconstruct  time series by using low frequency frequency features
-        et = f[:,self.modes*2:]
-        x_high = F.relu(self.bn2(self.convT(et.unsqueeze(2)).permute(0,2,1))) # reconstruct time series by using time features for high frequency patterns.
+        # Reconstruct time series using low-frequency FrFT features
+        a= -0.8
+        x_low_mag = torch.abs(frft(out_ft, a))  # Magnitude
+        x_low_phase = torch.angle(frft(out_ft, a))  # Phase
+        x_low = torch.cat([x_low_mag, x_low_phase], dim=1)  # Concatenate
+        x_low = self.channel_proj(x_low)  # Project back to num_channels
+
+        et = f[:, self.modes * 2:]
+        x_high = F.relu(self.bn2(self.convT(et.unsqueeze(2)).permute(0, 2, 1)))  # Reconstruct time series using time features for high-frequency patterns.
         return x_low + x_high
 
 class classifier(nn.Module):
@@ -140,17 +171,34 @@ class RAINCOAT(Algorithm):
         self.decoder = tf_decoder(configs).to(device)
         self.classifier = classifier(configs).to(device)
 
-        self.optimizer = torch.optim.Adam(
+        self.optimizer = torch.optim.AdamW(
             list(self.feature_extractor.parameters()) + \
                 list(self.decoder.parameters())+\
                 list(self.classifier.parameters()),
             lr=hparams["learning_rate"],
             weight_decay=hparams["weight_decay"]
         )
-        self.coptimizer = torch.optim.Adam(
+
+        self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
+            self.optimizer,
+            cycle_momentum = True,
+            max_lr= 5e-3,
+            steps_per_epoch=10,
+            epochs=hparams["num_epochs"]
+        )
+
+        self.coptimizer = torch.optim.AdamW(
             list(self.feature_extractor.parameters())+list(self.decoder.parameters()),
             lr=1*hparams["learning_rate"],
             weight_decay=hparams["weight_decay"]
+        )
+        
+        self.coscheduler = torch.optim.lr_scheduler.OneCycleLR(
+            self.coptimizer,
+            cycle_momentum = True,
+            max_lr= 5e-3,
+            steps_per_epoch=10,
+            epochs=hparams["num_epochs"]
         )
 
         self.hparams = hparams
@@ -192,7 +240,9 @@ class RAINCOAT(Algorithm):
 
         # Compute total loss with weights
         total_loss = lambda1 * recons + lambda2 * sink_loss + lambda3 * loss_cls
+        
         self.optimizer.step()
+        #self.scheduler.step()
 
         return {
             'Total_loss': total_loss.item(),
@@ -213,6 +263,8 @@ class RAINCOAT(Algorithm):
 
         recons = 1e-4 * (self.recons(trg_recon, trg_x) + self.recons(src_recon, src_x))
         recons.backward()
+
         self.coptimizer.step()
+        #self.scheduler.step()
 
         return {'Correct_reconstruction_loss': recons.item()}
