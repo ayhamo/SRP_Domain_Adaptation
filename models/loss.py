@@ -19,11 +19,12 @@ class SinkhornDistance(nn.Module):
         - Input: :math:`(N, P_1, D_1)`, :math:`(N, P_2, D_2)`
         - Output: :math:`(N)` or :math:`()`, depending on `reduction`
     """
-    def __init__(self, eps, max_iter, reduction='none'):
+    def __init__(self, eps, max_iter, reduction='none', device='cuda'):
         super(SinkhornDistance, self).__init__()
         self.eps = eps
         self.max_iter = max_iter
         self.reduction = reduction
+        self.device = device
 
     def forward(self, x, y):
         # The Sinkhorn algorithm takes as input three variables :
@@ -37,9 +38,9 @@ class SinkhornDistance(nn.Module):
 
         # both marginals are fixed with equal weights
         mu = torch.empty(batch_size, x_points, dtype=torch.float,
-                         requires_grad=False).fill_(1.0 / x_points).squeeze().to('cuda')
+                         requires_grad=False).fill_(1.0 / x_points).squeeze().to(self.device)
         nu = torch.empty(batch_size, y_points, dtype=torch.float,
-                         requires_grad=False).fill_(1.0 / y_points).squeeze().to('cuda')
+                         requires_grad=False).fill_(1.0 / y_points).squeeze().to(self.device)
 
         u = torch.zeros_like(mu)
         v = torch.zeros_like(nu)

@@ -3,11 +3,9 @@
 # pip install -r requirement.txt
 
 import argparse
-import warnings
 from trainers.trainer import cross_domain_trainer
-import sklearn.exceptions
 import pickle
-warnings.filterwarnings("ignore", category=sklearn.exceptions.UndefinedMetricWarning)
+
 
 parser = argparse.ArgumentParser()
 
@@ -27,7 +25,7 @@ parser.add_argument('--device',                 default='cuda',                 
 args = parser.parse_args()
 
 if __name__ == "__main__":
-    # python main.py --experiment_description WISDM --dataset WISDM --num_runs 1
+    # python main.py --experiment_description WISDM --dataset WISDM --num_runs 1 --device cuda
     trainer = cross_domain_trainer(args)
     trainer.train()
     

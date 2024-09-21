@@ -62,13 +62,10 @@ the training parameters.
 - [UniOT](https://arxiv.org/abs/2210.17067) -->
 
 
-## Usage
-
-### Model
-Our main model architecture can be found [here](models/models.py). The freuqency encoder is defined in  
+## Usage 
 
 ### Algorithm 
-The algorithm can be found [here](algorithms/RAINCOAT.py). 
+The algorithm & model can be found [here](algorithms/RAINCOAT.py). 
 
 
 ### Training a Model

@@ -43,10 +43,13 @@ class WISDM():
     def __init__(self):
         super(WISDM, self).__init__()
         self.train_params = {
-                'num_epochs': 50,
-                'batch_size': 64,
+                'num_epochs': 100,
+                'corr_epochs': 50,
+                'batch_size': 32,
                 'weight_decay': 1e-4,
-                'learning_rate':1e-3,     
+                'learning_rate':1e-3,
+                'scheduler_steps': 32,
+                'coscheduler_steps': 32
         }
 
 

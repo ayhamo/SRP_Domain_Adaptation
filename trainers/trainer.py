@@ -3,21 +3,23 @@ import torch.nn.functional as F
 import os
 import pandas as pd
 import numpy as np
-import warnings
-import sklearn.exceptions
 
-warnings.filterwarnings("ignore", category=sklearn.exceptions.UndefinedMetricWarning)
+import multiprocessing
+from functools import partial
 
 from sklearn.metrics import accuracy_score
+from sklearn.metrics import f1_score
 from dataloader.dataloader import data_generator
 from configs.data_model_configs import get_dataset_class
 from configs.hparams import get_hparams_class
 from algorithms.utils import fix_randomness, starting_logs
 from algorithms.RAINCOAT import RAINCOAT
-from sklearn.metrics import f1_score
+
+import warnings
+#warnings.simplefilter("ignore", category=RuntimeWarning)
+#np.seterr(all="ignore")
 
 torch.backends.cudnn.benchmark = True
-warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
 
 
 class cross_domain_trainer(object):
@@ -41,40 +43,20 @@ class cross_domain_trainer(object):
         # get dataset and base model configs
         self.dataset_configs, self.hparams_class = self.get_configs()
 
-        # to fix dimension of features in classifier and discriminator networks.
-        self.dataset_configs.final_out_channels = (
-            self.dataset_configs.final_out_channels
-        )
-
         # Specify number of hparams
         self.default_hparams = {
             **self.hparams_class.train_params,
         }
 
-    def train(self):
 
-        self.hparams = self.default_hparams
+    def single_run_scenario(self, scenario, run_id):
+        src_id, trg_id = scenario
+        
+        # fixing random seed
+        fix_randomness(run_id)
 
         # Logging
-        self.exp_log_dir = os.path.join(self.save_dir, f"RAINCOAT ClosedSet", self.experiment_description)
-        os.makedirs(self.exp_log_dir, exist_ok=True)
-
-        scenarios = (
-            self.dataset_configs.scenarios
-        )  # return the scenarios given a specific dataset.
-        df_a = pd.DataFrame(columns=["scenario", "run_id", "accuracy", "f1", "H-score"])
-
-        self.trg_acc_list = []
-
-        for i in scenarios:
-            src_id = i[0]
-            trg_id = i[1]
-            for run_id in range(self.num_runs):  # specify number of consecutive runs
-                # fixing random seed
-                fix_randomness(run_id)
-
-                # Logging
-                self.logger, self.scenario_log_dir = starting_logs(
+        self.logger, self.scenario_log_dir = starting_logs(
                     self.dataset,
                     "RAINCOAT",
                     self.exp_log_dir,
@@ -82,90 +64,112 @@ class cross_domain_trainer(object):
                     trg_id,
                     run_id,
                 )
-                self.fpath = os.path.join(self.home_path, self.scenario_log_dir, "backbone.pth")
-                self.cpath = os.path.join(self.home_path, self.scenario_log_dir, "classifier.pth")
-                
-                self.best_f1 = 0
+        self.fpath = os.path.join(self.home_path, self.scenario_log_dir, "backbone.pth")
+        self.cpath = os.path.join(self.home_path, self.scenario_log_dir, "classifier.pth")
+        
+        best_f1 = 0
 
-                # Load data
-                self.load_data(src_id, trg_id)
+        # Load data
+        self.load_data(src_id, trg_id)
 
-                # get algorithm
-                algorithm = RAINCOAT(self.dataset_configs, self.hparams, self.device)
-                algorithm.to(self.device)
-                self.algorithm = algorithm
+        # get algorithm
+        algorithm = RAINCOAT(self.dataset_configs, self.hparams, self.device)
+        algorithm.to(self.device)
+        self.algorithm = algorithm
 
-                # variables to save best model
-                best_feature_extractor_state = None
-                best_classifier_state = None
-                
-                # training..
-                for epoch in range(1, self.hparams["num_epochs"] + 1):
-                    joint_loaders = zip(self.src_train_dl, self.trg_train_dl)
+        self.best_feature_extractor_state = None
+        self.best_classifier_state = None
+        
+        # training
+        for epoch in range(1, self.hparams["num_epochs"] + 1):
+            joint_loaders = zip(self.src_train_dl, self.trg_train_dl)
+            algorithm.train()
 
-                    algorithm.train()
+             # for loop is defiend becuase some senarios have more than 1 batch and some only have 1 batch
+            for (src_x, src_y), (trg_x, _) in joint_loaders:
+                src_x, src_y, trg_x = (
+                    src_x.float().to(self.device),
+                    src_y.long().to(self.device),
+                    trg_x.float().to(self.device),
+                )
+                losses = algorithm.align(src_x, src_y, trg_x)
 
-                    # for loop is defiend becuase some senarios have more than 1 batch and some only have 1 batch
-                    for (src_x, src_y), (trg_x, _) in joint_loaders:
-                        src_x, src_y, trg_x = (
-                            src_x.float().to(self.device),
-                            src_y.long().to(self.device),
-                            trg_x.float().to(self.device),
-                        )
+            acc, f1 = self.eval(self.trg_val_dl)
 
-                        losses = algorithm.align(src_x, src_y, trg_x)
+            if f1 > best_f1:
+                self.logger.debug(f'[Epoch : {epoch}/{self.hparams["num_epochs"]}]')
+                best_f1 = f1
+                self.logger.debug(f"best f1: {best_f1}")
 
-                    # eval on validatopn
-                    acc, f1 = self.eval(self.trg_val_dl)
+                self.best_feature_extractor_state = algorithm.feature_extractor.state_dict()
+                self.best_classifier_state = algorithm.classifier.state_dict()
 
-                    if f1 > self.best_f1:
-                        # logging
-                        self.logger.debug(f'[Epoch : {epoch}/{self.hparams["num_epochs"]}]')
+        self.logger.debug("===== Correct ====")
+        for epoch in range(1, self.hparams["corr_epochs"] + 1):
+            joint_loaders = zip(self.src_train_dl, self.trg_train_dl)
+            algorithm.train()
 
-                        self.best_f1 = f1
-                        self.logger.debug(f"best f1: {self.best_f1}")
+            for (src_x, src_y), (trg_x, _) in joint_loaders:
+                src_x, src_y, trg_x = (
+                    src_x.float().to(self.device),
+                    src_y.long().to(self.device),
+                    trg_x.float().to(self.device),
+                )
+                correct_losses = algorithm.correct(src_x, src_y, trg_x)
 
-                        best_feature_extractor_state = self.algorithm.feature_extractor.state_dict()
-                        best_classifier_state = self.algorithm.classifier.state_dict()
+            acc, f1 = self.eval(self.trg_val_dl)
 
-                self.logger.debug("===== Correct ====")
-                for epoch in range(1, self.hparams["num_epochs"] + 1):
-                    joint_loaders = zip(self.src_train_dl, self.trg_train_dl)
-                    algorithm.train()
+            if f1 >= best_f1:
+                self.logger.debug(f'[Epoch : {epoch}/{self.hparams["corr_epochs"]}]')
+                best_f1 = f1
+                self.logger.debug(f"best f1: {best_f1}")
+                self.best_feature_extractor_state = algorithm.feature_extractor.state_dict()
+                self.best_classifier_state = algorithm.classifier.state_dict()
 
-                    for (src_x, src_y), (trg_x, _) in joint_loaders:
-                        src_x, src_y, trg_x = (
-                        src_x.float().to(self.device),
-                        src_y.long().to(self.device),
-                        trg_x.float().to(self.device),)
+        # to save file only once, not at each best f1
+        # current behavoiur is not to save model, and use variables
+        #torch.save(best_feature_extractor_state, self.fpath)
+        #torch.save(best_classifier_state, self.cpath)
+        
+        # at final eval, we use test now
+        acc, f1 = self.eval(self.trg_test_dl, final=True)
 
-                        algorithm.correct(src_x, src_y, trg_x)
+        return {"scenario": scenario, "run_id": run_id, "accuracy": acc, "f1": f1}
 
-                        correct_losses = algorithm.correct(src_x, src_y, trg_x)
+    def train(self):
+        self.hparams = self.default_hparams
 
-                    acc, f1 = self.eval(self.trg_val_dl)
+        # Logging
+        self.exp_log_dir = os.path.join(self.save_dir, f"RAINCOAT ClosedSet", self.experiment_description)
+        os.makedirs(self.exp_log_dir, exist_ok=True)
 
-                    if f1 >= self.best_f1:
-                        self.logger.debug(f'[Epoch : {epoch}/{self.hparams["num_epochs"]}]')
-                        self.best_f1 = f1
-                        self.logger.debug(f"best f1: {self.best_f1}")
-                        best_feature_extractor_state = self.algorithm.feature_extractor.state_dict()
-                        best_classifier_state = self.algorithm.classifier.state_dict()
-                
-                # to save file only once, not at each best f1
-                torch.save(best_feature_extractor_state, self.fpath)
-                torch.save(best_classifier_state, self.cpath)
-                
-                # at final eval, we use test now
-                acc, f1 = self.eval(self.trg_test_dl, final=True)
+        scenarios = self.dataset_configs.scenarios
+        df_a = pd.DataFrame(columns=["scenario", "run_id", "accuracy", "f1"])
 
-                # final acc on test for visulize?
-                self.trg_acc_list.append(acc)
-                
-                log = {"scenario": i, "run_id": run_id, "accuracy": acc, "f1": f1}
+        self.trg_acc_list = []
+
+        for scenario in scenarios:
+            # Create a partial function with fixed scenario
+            run_iteration = partial(self.single_run_scenario, scenario)
+            
+            # Create a pool of workers
+            with multiprocessing.Pool(processes=self.num_runs) as pool:
+                # Run the iterations in parallel
+                results = pool.map(run_iteration, range(self.num_runs))
+
+            # Process and log results
+            for result in results:
+                log = {
+                    "scenario": result["scenario"],
+                    "run_id": result["run_id"],
+                    "accuracy": result["accuracy"],
+                    "f1": result["f1"]
+                }
                 new_row = pd.DataFrame([log])
                 df_a = pd.concat([df_a, new_row], ignore_index=True)
+                self.trg_acc_list.append(result['accuracy'])
 
+        # Calculate average results
         mean_acc, std_acc, mean_f1, std_f1 = self.avg_result(df_a)
         log = {
             "scenario": "Avg Accuracy: " + str(mean_acc),
@@ -176,8 +180,11 @@ class cross_domain_trainer(object):
 
         new_row = pd.DataFrame([log])
         df_a = pd.concat([df_a, new_row], ignore_index=True)
+
+        # Save results to CSV file
         path = os.path.join(self.exp_log_dir, "average_correct.csv")
         df_a.to_csv(path, sep=",", index=False)
+
 
     def visualize(self):
         feature_extractor = self.algorithm.feature_extractor.to(self.device)
@@ -219,8 +226,14 @@ class cross_domain_trainer(object):
         classifier = self.algorithm.classifier.to(self.device)
         
         if final == True:
-            feature_extractor.load_state_dict(torch.load(self.fpath))
-            classifier.load_state_dict(torch.load(self.cpath))
+            # current behavoiur to not to save models and use varaibles
+            # at the end we might want to change this to save the best models for each secanrio
+
+            #feature_extractor.load_state_dict(torch.load(self.fpath))
+            #classifier.load_state_dict(torch.load(self.cpath))
+            
+            self.algorithm.feature_extractor.load_state_dict(self.best_feature_extractor_state)
+            self.algorithm.classifier.load_state_dict(self.best_classifier_state)
         feature_extractor.eval()
         classifier.eval()
 

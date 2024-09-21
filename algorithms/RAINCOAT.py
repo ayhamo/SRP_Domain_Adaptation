@@ -118,7 +118,7 @@ class tf_encoder(nn.Module):
 
         self.freq_feature = SpectralConv1d(self.width, self.width, self.modes1,self.length)  # Frequency Feature Encoder
         self.bn_freq = nn.BatchNorm1d(configs.fourier_modes*2)   # It doubles because frequency features contain both amplitude and phase
-        self.cnn = CNN(configs).to('cuda')  # Time Feature Encoder
+        self.cnn = CNN(configs)  # Time Feature Encoder
         self.avg = nn.Conv1d(self.width, 1, kernel_size=3 ,
                   stride=configs.stride, bias=False, padding=(3 // 2))
 
@@ -182,8 +182,8 @@ class RAINCOAT(Algorithm):
         self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
             self.optimizer,
             cycle_momentum = True,
-            max_lr= 5e-3,
-            steps_per_epoch=10,
+            max_lr= 1e-2,
+            steps_per_epoch=hparams["scheduler_steps"],
             epochs=hparams["num_epochs"]
         )
 
@@ -196,16 +196,16 @@ class RAINCOAT(Algorithm):
         self.coscheduler = torch.optim.lr_scheduler.OneCycleLR(
             self.coptimizer,
             cycle_momentum = True,
-            max_lr= 5e-3,
-            steps_per_epoch=10,
-            epochs=hparams["num_epochs"]
+            max_lr= 1e-2,
+            steps_per_epoch=hparams["coscheduler_steps"],
+            epochs=hparams["corr_epochs"]
         )
 
         self.hparams = hparams
         self.recons = nn.L1Loss(reduction='sum').to(device)
         self.pi = torch.acos(torch.zeros(1)).item() * 2
         self.loss_func = losses.ContrastiveLoss(pos_margin=0.5)
-        self.sink = SinkhornDistance(eps=1e-3, max_iter=1000, reduction='sum')
+        self.sink = SinkhornDistance(eps=1e-3, max_iter=1000, reduction='sum', device=device)
 
     def align(self, src_x, src_y, trg_x):
         self.optimizer.zero_grad()
@@ -242,7 +242,7 @@ class RAINCOAT(Algorithm):
         total_loss = lambda1 * recons + lambda2 * sink_loss + lambda3 * loss_cls
         
         self.optimizer.step()
-        #self.scheduler.step()
+        self.scheduler.step()
 
         return {
             'Total_loss': total_loss.item(),
@@ -265,6 +265,6 @@ class RAINCOAT(Algorithm):
         recons.backward()
 
         self.coptimizer.step()
-        #self.scheduler.step()
+        self.scheduler.step()
 
         return {'Correct_reconstruction_loss': recons.item()}

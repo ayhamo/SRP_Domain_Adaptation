@@ -55,17 +55,17 @@ class Load_Dataset(Dataset):
 
 def data_generator(data_path, domain_id, dataset_configs, hparams):
     # loading path
-    full_train_dataset = torch.load(os.path.join(data_path, "train_" + domain_id + ".pt"), weights_only=False)
-    test_dataset = torch.load(os.path.join(data_path, "test_" + domain_id + ".pt"), weights_only=False)
+    train_dataset = torch.load(os.path.join(data_path, "train_" + domain_id + ".pt"), weights_only=False)
+    full_test_dataset = torch.load(os.path.join(data_path, "test_" + domain_id + ".pt"), weights_only=False)
 
     # Loading datasets
-    full_train_dataset = Load_Dataset(full_train_dataset, dataset_configs.normalize)
-    test_dataset = Load_Dataset(test_dataset, dataset_configs.normalize)
+    train_dataset = Load_Dataset(train_dataset, dataset_configs.normalize)
+    full_test_dataset = Load_Dataset(full_test_dataset, dataset_configs.normalize)
 
-    # Split training data into train and validation
-    val_size = int(len(full_train_dataset) * 0.2)  # 20% for validation
-    train_size = len(full_train_dataset) - val_size
-    train_dataset, val_dataset = random_split(full_train_dataset, [train_size, val_size])
+    # Split TEST data into train and validation
+    val_size = int(len(full_test_dataset) * 0.2)  # 20% for validation
+    test_size = len(full_test_dataset) - val_size
+    test_dataset, val_dataset = random_split(full_test_dataset, [test_size, val_size])
 
     # Dataloaders
     batch_size = hparams["batch_size"]

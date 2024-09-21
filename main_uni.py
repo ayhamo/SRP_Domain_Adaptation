@@ -1,9 +1,5 @@
 import argparse
-import warnings
 from trainers.trainer_uni import cross_domain_trainer
-import sklearn.exceptions
-
-warnings.filterwarnings("ignore", category=sklearn.exceptions.UndefinedMetricWarning)
 
 parser = argparse.ArgumentParser()
 
@@ -26,5 +22,5 @@ if __name__ == "__main__":
 
     trainer = cross_domain_trainer(args)
     trainer.train()
-    # python main_uni.py --experiment_description WISDM --dataset WISDM --num_runs 1
+    # python main_uni.py --experiment_description WISDM --dataset WISDM --num_runs 1 --device cuda
     
