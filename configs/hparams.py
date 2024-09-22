@@ -17,7 +17,9 @@ class HAR():
 
         }
         self.alg_hparams = {
-            'RAINCOAT':       {'learning_rate':5e-4,     'src_cls_loss_wt': 0.5,    'domain_loss_wt': 0.5}
+            'learning_rate':5e-4,     
+            'src_cls_loss_wt': 0.5,    
+            'domain_loss_wt': 0.5
         }
 
 
@@ -31,7 +33,9 @@ class EEG():
 
         }
         self.alg_hparams = {
-            'RAINCOAT':       {'learning_rate':0.002,     'src_cls_loss_wt': 0.5,    'domain_loss_wt': 0.5}
+            'learning_rate':0.002,     
+            'src_cls_loss_wt': 0.5,    
+            'domain_loss_wt': 0.5
         }
 
 
@@ -39,13 +43,13 @@ class WISDM():
     def __init__(self):
         super(WISDM, self).__init__()
         self.train_params = {
-                'num_epochs': 50,
-                'batch_size': 64,
+                'num_epochs': 100,
+                'corr_epochs': 50,
+                'batch_size': 32,
                 'weight_decay': 1e-4,
-
-        }
-        self.alg_hparams = {
-            'RAINCOAT':       {'learning_rate':1e-3,     'src_cls_loss_wt': 0.5,    'domain_loss_wt': 0.5},
+                'learning_rate':1e-3,
+                'scheduler_steps': 32,
+                'coscheduler_steps': 32
         }
 
 
@@ -59,7 +63,9 @@ class HHAR_SA():
                 'weight_decay': 1e-4,
         }
         self.alg_hparams = {
-            'RAINCOAT':       {'learning_rate':0.001,     'src_cls_loss_wt': 0.5,    'domain_loss_wt': 0.5},
+            'learning_rate':0.001,     
+            'src_cls_loss_wt': 0.5,    
+            'domain_loss_wt': 0.5,
         }
 
 
@@ -72,5 +78,7 @@ class Boiler():
                 'weight_decay': 1e-4,
         }
         self.alg_hparams = {
-            'RAINCOAT':         {'learning_rate': 0.0005,   'src_cls_loss_wt': 0.9603,  'domain_loss_wt':0.9238}
+            'learning_rate': 0.0005,   
+            'src_cls_loss_wt': 0.9603,  
+            'domain_loss_wt':0.9238
         }

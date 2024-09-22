@@ -56,8 +56,8 @@ class Load_Dataset(Dataset):
 
 def data_generator(data_path, domain_id, dataset_configs, hparams):
     # loading path
-    train_dataset = torch.load(os.path.join(data_path, "train_" + domain_id + ".pt"))
-    test_dataset = torch.load(os.path.join(data_path, "test_" + domain_id + ".pt"))
+    train_dataset = torch.load(os.path.join(data_path, "train_" + domain_id + ".pt"), weights_only=False)
+    test_dataset = torch.load(os.path.join(data_path, "test_" + domain_id + ".pt"), weights_only=False)
 
     # Loading datasets
     train_dataset = Load_Dataset(train_dataset, dataset_configs.normalize)

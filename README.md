@@ -1,6 +1,6 @@
-## Authors: [Huan He](https://hehuannb.github.io/) (hehuannb@gmail.com), [Owen Queen](https://www.linkedin.com/in/owen-queen-0348561a2/), [Teddy Koker](https://teddykoker.com/), [Consuelo Cuevas](https://consuelo-cuevas.editorx.io/home), [Theodoros Tsiligkaridis](https://github.com/mims-harvard/Raindrop)(ttsili@ll.mit.edu), [Marinka Zitnik](https://zitniklab.hms.harvard.edu/) (marinka@hms.harvard.edu)
+## Worked on by: ...
 
-## [Project website](https://zitniklab.hms.harvard.edu/projects/Raincoat/)
+## Original Authors: [Huan He](https://hehuannb.github.io/) (hehuannb@gmail.com), [Owen Queen](https://www.linkedin.com/in/owen-queen-0348561a2/), [Teddy Koker](https://teddykoker.com/), [Consuelo Cuevas](https://consuelo-cuevas.editorx.io/home), [Theodoros Tsiligkaridis](https://github.com/mims-harvard/Raindrop)(ttsili@ll.mit.edu), [Marinka Zitnik](https://zitniklab.hms.harvard.edu/) (marinka@hms.harvard.edu)
 
 ## Raincoat Paper: [ICML 2023](https://arxiv.org/abs/2302.03133)
 
@@ -12,16 +12,14 @@ The transfer of models trained on labeled datasets from a source domain to unlab
 <img src="https://zitniklab.hms.harvard.edu/img/Raincoat-method.png">
 </p>
 
+## Overview of The changes we made:
+...
+
 ## Installation and Setup
 
 ### 1: Download the Repo
 
-First, clone the GitHub repository:
-
-```
-git clone https://github.com/mims-harvard/Raincoat
-cd Raincoat
-```
+First, clone the GitHub repository
 
 ### 2: Set Up Environment
 
@@ -30,21 +28,9 @@ To install the core environment dependencies of Raincoat, use requirement.txt:
 pip: -r requirements.txt
 ```
 
-    - Python3
-    - Pytorch==1.7
-    - Numpy==1.20.1
-    - scikit-learn==0.24.1
-    - Pandas==1.2.4
-    - skorch==0.10.0 
-    - openpyxl==3.0.7 
     
 ### 3: Download Datasets
 Create a folder and download the pre-processed versions of the datasets [WISDM](https://researchdata.ntu.edu.sg/dataset.xhtml?persistentId=doi:10.21979/N9/KJWE5B), [HAR](https://researchdata.ntu.edu.sg/dataset.xhtml?persistentId=doi:10.21979/N9/0SYHTZ), [HHAR](https://researchdata.ntu.edu.sg/dataset.xhtml?persistentId=doi:10.21979/N9/OWDFXO), [Boiler](https://researchdata.https://github.com/DMIRLAB-Group/SASA/tree/main/datasets/Boiler), and [Sleep-EDF](https://researchdata.ntu.edu.sg/dataset.xhtml?persistentId=doi:10.21979/N9/UD1IM9).
-
-To add new dataset (*e.g.,* NewData), it should be placed in a folder named: NewData in the datasets directory.
-
-Since "NewData" has several domains, each domain should be split into train/test splits with naming style as
-"train_*x*.pt" and "test_*x*.pt".
 
 The structure of data files should in dictionary form as follows:
 `train.pt = {"samples": data, "labels: labels}`, and similarly for `test.pt`.
@@ -76,41 +62,26 @@ the training parameters.
 - [UniOT](https://arxiv.org/abs/2210.17067) -->
 
 
-## Usage
-
-### Example
-Please check out the [jupyter notebook](example.ipynb) for understanding RAINCOAT. 
-
-### Model
-Our main model architecture can be found [here](models/models.py). The freuqency encoder is defined in  
+## Usage 
 
 ### Algorithm 
-The algorithm can be found [here](algorithms/RAINCOAT.py). 
-The implementation is build upon a published benchmark work [Adatime](https://arxiv.org/abs/2203.08321). 
+The algorithm & model can be found [here](algorithms/RAINCOAT.py). 
 
 
 ### Training a Model
 
 The experiments are organised in a hierarchical way such that:
 - Experiments are collected under one directory assigned by `--experiment_description`.
-- Each experiment could have different trials, each is specified by `--run_description`.
 - Each experiment could have different independent runs, which is determined by `--num_runs`.
-- For example, if we want to experiment different UDA methods using Raincoat on WISDM dataset , we can assign
-`--da_method RAINCOAT --run_description DANN` and `--dataset WISDM --num_runs 5` and so on.
 
 To train a model:
 
 ```
 python main.py  --experiment_description WISDM  \
-                --run_description W_RAINCOAT \
-                --da_method RAINCOAT \
                 --dataset WISDM \
-                --backbone CNN \
                 --num_runs 5 \
 ```
 
-
-An example bash script is provided in `scripts/run_WISDM.sh`.
 
 To see and/or modify the default hyperparameters, please see `configs/hparams.py` and `configs/data_model_configs.py`.
 
