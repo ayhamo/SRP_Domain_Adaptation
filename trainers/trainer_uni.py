@@ -117,7 +117,7 @@ class cross_domain_trainer(object):
                 dis2proto_a = self.calc_distance(size_ltrain, self.trg_train_dl)
                 dis2proto_a_test = self.calc_distance(size_ltest, self.trg_test_dl)
 
-                for epoch in range(1, self.hparams["num_epochs"] + 1):
+                for epoch in range(1, self.hparams["corr_epochs"] + 1):
                     joint_loaders = zip(self.src_train_dl, self.trg_train_dl)
                     algorithm.train()
 
@@ -131,16 +131,16 @@ class cross_domain_trainer(object):
                     acc, f1, _ = self.evaluate_RAINCOAT(self.trg_test_dl.dataset.y_data)
 
                     if f1 > self.best_f1:
-                        self.logger.debug(f'[Epoch : {epoch}/{self.hparams["num_epochs"]}]')
+                        self.logger.debug(f'[Epoch : {epoch}/{self.hparams["corr_epochs"]}]')
                         self.best_f1 = f1
                         self.logger.debug(f"best f1: {self.best_f1}")
 
                         # Save best model states
                         best_feature_extractor_state = self.algorithm.feature_extractor.state_dict()
                         best_classifier_state = self.algorithm.classifier.state_dict()
-                
-                # TODO Look on saving the models or just loading them without saving
 
+                best_feature_extractor_state = self.algorithm.feature_extractor.state_dict()
+                best_classifier_state = self.algorithm.classifier.state_dict()
                 # to save file only once, not at each best f1
                 # we save the state dict that has best model, not last one!
                 #torch.save(best_feature_extractor_state, self.fpath)
