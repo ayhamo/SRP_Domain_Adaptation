@@ -15,10 +15,6 @@ from configs.hparams import get_hparams_class
 from algorithms.utils import fix_randomness, starting_logs
 from algorithms.RAINCOAT import RAINCOAT
 
-import warnings
-#warnings.simplefilter("ignore", category=RuntimeWarning)
-#np.seterr(all="ignore")
-
 torch.backends.cudnn.benchmark = True
 
 

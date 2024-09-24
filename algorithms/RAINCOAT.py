@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from pytorch_metric_learning import losses
 
-from models.loss import SinkhornDistance
+from .loss import SinkhornDistance
 
 class Algorithm(torch.nn.Module):
 
