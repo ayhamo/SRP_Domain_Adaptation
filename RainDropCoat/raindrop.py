@@ -24,10 +24,12 @@ class Raindrop_v2(nn.Module):
     """
 
     def __init__(self, d_inp=36, d_model=64, nhead=4, nhid=128, nlayers=2, dropout=0.3, max_len=215, d_static=9,
-                 MAX=100, perc=0.5, aggreg='mean', n_classes=2, global_structure=None, sensor_wise_mask=False, static=True):
+                 MAX=100, perc=0.5, aggreg='mean', n_classes=2, global_structure=None, sensor_wise_mask=False, static=True, device = "cuda"):
         super().__init__()
         from torch.nn import TransformerEncoder, TransformerEncoderLayer
         self.model_type = 'Transformer'
+
+        self.device = device
 
         self.global_structure = global_structure
         self.sensor_wise_mask = sensor_wise_mask
@@ -48,15 +50,15 @@ class Raindrop_v2(nn.Module):
         self.pos_encoder = PositionalEncodingTF(d_pe, max_len, MAX)
 
         if self.sensor_wise_mask == True:
-            encoder_layers = TransformerEncoderLayer(self.d_inp*(self.d_ob+16), nhead, nhid, dropout)
+            encoder_layers = TransformerEncoderLayer(self.d_inp*(self.d_ob+16), nhead, nhid, dropout, batch_first=True)
         else:
-            encoder_layers = TransformerEncoderLayer(d_model+16, nhead, nhid, dropout)
+            encoder_layers = TransformerEncoderLayer(d_model+16, nhead, nhid, dropout, batch_first=True)
 
         self.transformer_encoder = TransformerEncoder(encoder_layers, nlayers)
 
-        self.adj = torch.ones([self.d_inp, self.d_inp]).cuda()
+        self.adj = torch.ones([self.d_inp, self.d_inp]).to(self.device)
 
-        self.R_u = Parameter(torch.Tensor(1, self.d_inp*self.d_ob)).cuda()
+        self.R_u = Parameter(torch.Tensor(1, self.d_inp*self.d_ob)).to(self.device)
 
         self.ob_propagation = Observation_progation(in_channels=max_len*self.d_ob, out_channels=max_len*self.d_ob, heads=1,
                                                     n_nodes=d_inp, ob_dim=self.d_ob)
@@ -106,6 +108,10 @@ class Raindrop_v2(nn.Module):
         n_sensor = self.d_inp
 
         src = torch.repeat_interleave(src, self.d_ob, dim=-1)
+
+        print(f"src shape in Raindrop_v2: {src.shape}")
+        print(f"self.R_u shape in Raindrop_v2: {self.R_u.shape}")
+
         h = F.relu(src*self.R_u)
         pe = self.pos_encoder(times)
         if static is not None:
@@ -114,7 +120,7 @@ class Raindrop_v2(nn.Module):
         h = self.dropout(h)
 
         mask = torch.arange(maxlen)[None, :] >= (lengths.cpu()[:, None])
-        mask = mask.squeeze(1).cuda()
+        mask = mask.squeeze(1).to(self.device)
 
         step1 = True
         x = h
@@ -122,7 +128,7 @@ class Raindrop_v2(nn.Module):
             output = x
             distance = 0
         elif step1 == True:
-            adj = self.global_structure.cuda()
+            adj = self.global_structure.to(self.device)
             adj[torch.eye(self.d_inp).byte()] = 1
 
             edge_index = torch.nonzero(adj).T
@@ -130,13 +136,13 @@ class Raindrop_v2(nn.Module):
 
             batch_size = src.shape[1]
             n_step = src.shape[0]
-            output = torch.zeros([n_step, batch_size, self.d_inp*self.d_ob]).cuda()
+            output = torch.zeros([n_step, batch_size, self.d_inp*self.d_ob]).to(self.device)
 
             use_beta = False
             if use_beta == True:
-                alpha_all = torch.zeros([int(edge_index.shape[1]/2), batch_size]).cuda()
+                alpha_all = torch.zeros([int(edge_index.shape[1]/2), batch_size]).to(self.device)
             else:
-                alpha_all = torch.zeros([edge_index.shape[1],  batch_size]).cuda()
+                alpha_all = torch.zeros([edge_index.shape[1],  batch_size]).to(self.device)
             for unit in range(0, batch_size):
                 stepdata = x[:, unit, :]
                 p_t = pe[:, unit, :]
@@ -184,7 +190,7 @@ class Raindrop_v2(nn.Module):
             lengths2 = lengths.unsqueeze(1)
             mask2 = mask.permute(1, 0).unsqueeze(2).long()
             if sensor_wise_mask:
-                output = torch.zeros([batch_size,self.d_inp, self.d_ob+16]).cuda()
+                output = torch.zeros([batch_size,self.d_inp, self.d_ob+16]).to(self.device)
                 extended_missing_mask = missing_mask.view(-1, batch_size, self.d_inp)
                 for se in range(self.d_inp):
                     r_out = r_out.view(-1, batch_size, self.d_inp, (self.d_ob+16))

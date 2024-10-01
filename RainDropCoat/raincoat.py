@@ -5,7 +5,7 @@ from pytorch_metric_learning import losses
 
 from Raincoat.algorithms.loss import SinkhornDistance
 
-from Raindrop.code.models_rd import Raindrop_v2
+from raindrop import Raindrop_v2
 
 class Algorithm(torch.nn.Module):
 
@@ -62,7 +62,7 @@ class SpectralConv1d(nn.Module):
         return torch.concat([r, p], -1), out_frft
 
 class tf_encoder(nn.Module):
-    def __init__(self, configs):
+    def __init__(self, configs, device):
         super(tf_encoder, self).__init__()
         self.modes1 = configs.fourier_modes   # Number of low-frequency modes to keep
         self.width = configs.input_channels
@@ -72,7 +72,7 @@ class tf_encoder(nn.Module):
         self.bn_freq = nn.BatchNorm1d(configs.fourier_modes*2)   # It doubles because frequency features contain both amplitude and phase
         self.avg = nn.Conv1d(self.width, 1, kernel_size=3 ,
                   stride=configs.stride, bias=False, padding=(3 // 2))
-        
+
         # No longer need CNN, but we will use raindrop
         # Integrate RAINDROP
         self.raindrop = Raindrop_v2(
@@ -91,13 +91,17 @@ class tf_encoder(nn.Module):
             global_structure=None,                   # Initialized later in RAINCOAT
             sensor_wise_mask=False,                  # Not using sensor-wise masks in this integration
             static=False                              # No static features in WISDM (for now)
+            device = device
         )
 
 
     def forward(self, src, static, times, lengths):
         ef, out_ft = self.freq_feature(src)
         ef = F.relu(self.bn_freq(self.avg(ef).squeeze()))
-        
+
+        # Reshape src for RAINDROP
+        src = src.permute(2, 0, 1) # Now shape is [sequence_length, batch_size, input_channels]
+
         # Use RAINDROP for time-domain feature extraction
         et, _, _ = self.raindrop(src, static, times, lengths)
 
@@ -150,7 +154,7 @@ class classifier(nn.Module):
 class RAINCOAT(Algorithm):
     def __init__(self, configs, hparams, device):
         super(RAINCOAT, self).__init__(configs)
-        self.feature_extractor = tf_encoder(configs).to(device)
+        self.feature_extractor = tf_encoder(configs,device).to(device)
         self.decoder = tf_decoder(configs).to(device)
         self.classifier = classifier(configs).to(device)
 
