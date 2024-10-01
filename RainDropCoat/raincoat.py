@@ -62,7 +62,7 @@ class SpectralConv1d(nn.Module):
         return torch.concat([r, p], -1), out_frft
 
 class tf_encoder(nn.Module):
-    def __init__(self, configs, device):
+    def __init__(self, configs):
         super(tf_encoder, self).__init__()
         self.modes1 = configs.fourier_modes   # Number of low-frequency modes to keep
         self.width = configs.input_channels
@@ -91,7 +91,7 @@ class tf_encoder(nn.Module):
             global_structure=None,                   # Initialized later in RAINCOAT
             sensor_wise_mask=False,                  # Not using sensor-wise masks in this integration
             static=False                              # No static features in WISDM (for now)
-        ).to(device)
+        )
 
 
     def forward(self, src, static, times, lengths):
@@ -101,8 +101,10 @@ class tf_encoder(nn.Module):
         # Use RAINDROP for time-domain feature extraction
         et, _, _ = self.raindrop(src, static, times, lengths)
 
+
         f = torch.concat([ef,et],-1)
         return F.normalize(f), out_ft
+
 
 class tf_decoder(nn.Module):
     def __init__(self, configs):

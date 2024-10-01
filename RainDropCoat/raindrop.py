@@ -8,6 +8,7 @@ from torch_geometric.nn.inits import glorot
 from Raindrop.code.models_rd import PositionalEncodingTF
 from Raindrop.code.Ob_propagation import Observation_progation
 
+
 class Raindrop_v2(nn.Module):
     """Implement the raindrop stratey one by one."""
     """ Transformer model with context embedding, aggregation, split dimension positional and element embedding

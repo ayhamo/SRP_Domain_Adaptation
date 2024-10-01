@@ -1,27 +1,16 @@
-"""Here is an initial version of the proposed Raindrop model. The scripts will be further refined in the future, after paper acceptance. """
-wandb = False
-
-if wandb:
-    import wandb
-    os.environ['WANDB_SILENT']="true"
-
-    wandb.login(key=str('14734fe9c5574e019e8f517149a20d6fe1b2fd0d'))
-    config = wandb.config
-    run = wandb.init(project='Raindrop', entity='XZ', config={'wandb_nb':'wandb_three_in_one_hm'})
-
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import os
-import time
-from sklearn.metrics import roc_auc_score, classification_report, confusion_matrix, average_precision_score, precision_score, recall_score, f1_score
-from models_rd import *
-from utils_rd import *
+from sklearn.metrics import roc_auc_score, confusion_matrix, average_precision_score
+from .models_rd import *
+from .utils_rd import *
 from sklearn.metrics.pairwise import cosine_similarity
 from tqdm import tqdm
 import warnings
 warnings.filterwarnings("ignore")
+
+torch.manual_seed(1)
 
 
 def one_hot(y_):
@@ -55,199 +44,189 @@ def diffuse(unit, N=10):
     return torch.max(unit, dim=-1).values
 
 
-torch.manual_seed(1)
+def raindrop_training(args):
 
-import argparse
-parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', type=str, default='P12', choices=['P12', 'P19', 'eICU', 'PAM']) #
-parser.add_argument('--withmissingratio', default=False, help='if True, missing ratio ranges from 0 to 0.5; if False, missing ratio =0') #
-parser.add_argument('--splittype', type=str, default='random', choices=['random', 'age', 'gender'], help='only use for P12 and P19')
-parser.add_argument('--reverse', default=False, help='if True,use female, older for tarining; if False, use female or younger for training') #
-parser.add_argument('--feature_removal_level', type=str, default='no_removal', choices=['no_removal', 'set', 'sample'],
-                    help='use this only when splittype==random; otherwise, set as no_removal') #
-parser.add_argument('--predictive_label', type=str, default='mortality', choices=['mortality', 'LoS'],
-                    help='use this only with P12 dataset (mortality or length of stay)')
-args, unknown = parser.parse_known_args()
+    # This was added to collect all embeddings and labels for each split
+    all_embeddings = []
+    all_labels = [] 
 
+    arch = 'raindrop'
+    model_path = './Raindrop/models/'
 
-arch = 'raindrop'
-model_path = './Raindrop/models/'
-
-dataset = args.dataset
-print('Dataset used: ', dataset)
-
-if dataset == 'P12':
-    base_path = './Raindrop/P12data'
-elif dataset == 'P19':
-    base_path = './Raindrop/P19data'
-elif dataset == 'eICU':
-    base_path = './Raindrop/eICUdata'
-elif dataset == 'PAM':
-    base_path = './Raindrop/PAMdata'
-
-baseline = False  # always False for Raindrop
-split = args.splittype  # possible values: 'random', 'age', 'gender'
-reverse = args.reverse  # False or True
-feature_removal_level = args.feature_removal_level  # 'set', 'sample'
-
-print('args.dataset, args.splittype, args.reverse, args.withmissingratio, args.feature_removal_level',
-      args.dataset, args.splittype, args.reverse, args.withmissingratio, args.feature_removal_level)
-
-"""While missing_ratio >0, feature_removal_level is automatically used"""
-if args.withmissingratio == True:
-    missing_ratios = [0.1, 0.2, 0.3, 0.4, 0.5]
-else:
-    missing_ratios = [0]
-print('missing ratio list', missing_ratios)
-
-sensor_wise_mask = False
-
-for missing_ratio in missing_ratios:
-    num_epochs = 20
-    learning_rate = 0.0001  # 0.001 works slightly better, sometimes 0.0001 better, depends on settings and datasets
+    dataset = args["dataset"]
+    print('Dataset used: ', dataset)
 
     if dataset == 'P12':
-        d_static = 9
-        d_inp = 36
-        static_info = 1
+        base_path = './Raindrop/P12data'
     elif dataset == 'P19':
-        d_static = 6
-        d_inp = 34
-        static_info = 1
+        base_path = './Raindrop/P19data'
     elif dataset == 'eICU':
-        d_static = 399
-        d_inp = 14
-        static_info = 1
+        base_path = './Raindrop/eICUdata'
     elif dataset == 'PAM':
-        d_static = 0
-        d_inp = 17
-        static_info = None
+        base_path = './Raindrop/PAMdata'
 
-    d_ob = 4
-    d_model = d_inp * d_ob
-    nhid = 2 * d_model
-    nlayers = 2
-    nhead = 2
-    dropout = 0.2
+    baseline = False  # always False for Raindrop
+    split = args["splittype"]  # possible values: 'random', 'age', 'gender'
+    reverse = args["reverse"]  # False or True
+    feature_removal_level = args["feature_removal_level"]  # 'set', 'sample'
 
-    if dataset == 'P12':
-        max_len = 215
-        n_classes = 2
-    elif dataset == 'P19':
-        max_len = 60
-        n_classes = 2
-    elif dataset == 'eICU':
-        max_len = 300
-        n_classes = 2
-    elif dataset == 'PAM':
-        max_len = 600
-        n_classes = 8
+    print('args.dataset, args.splittype, args.reverse, args.withmissingratio, args.feature_removal_level',
+        args["dataset"], args["splittype"], args["reverse"], args["withmissingratio"], args["feature_removal_level"])
 
-    aggreg = 'mean'
+    """While missing_ratio >0, feature_removal_level is automatically used"""
+    if args["withmissingratio"] == True:
+        missing_ratios = [0.1, 0.2, 0.3, 0.4, 0.5]
+    else:
+        missing_ratios = [0]
+    print('missing ratio list', missing_ratios)
 
-    MAX = 100
+    sensor_wise_mask = False
 
-    n_runs = 1
-    n_splits = 5
-    subset = False
+    for missing_ratio in missing_ratios:
+        num_epochs = 2
+        learning_rate = 0.0001  # 0.001 works slightly better, sometimes 0.0001 better, depends on settings and datasets
 
-    acc_arr = np.zeros((n_splits, n_runs))
-    auprc_arr = np.zeros((n_splits, n_runs))
-    auroc_arr = np.zeros((n_splits, n_runs))
-    precision_arr = np.zeros((n_splits, n_runs))
-    recall_arr = np.zeros((n_splits, n_runs))
-    F1_arr = np.zeros((n_splits, n_runs))
-    for k in range(n_splits):
-        split_idx = k + 1
-        print('Split id: %d' % split_idx)
         if dataset == 'P12':
-            if subset == True:
-                split_path = '/splits/phy12_split_subset' + str(split_idx) + '.npy'
-            else:
-                split_path = '/splits/phy12_split' + str(split_idx) + '.npy'
+            d_static = 9
+            d_inp = 36
+            static_info = 1
         elif dataset == 'P19':
-            split_path = '/splits/phy19_split' + str(split_idx) + '_new.npy'
+            d_static = 6
+            d_inp = 34
+            static_info = 1
         elif dataset == 'eICU':
-            split_path = '/splits/eICU_split' + str(split_idx) + '.npy'
+            d_static = 399
+            d_inp = 14
+            static_info = 1
         elif dataset == 'PAM':
-            split_path = '/splits/PAM_split_' + str(split_idx) + '.npy'
+            d_static = 0
+            d_inp = 17
+            static_info = None
 
-        # prepare the data:
-        Ptrain, Pval, Ptest, ytrain, yval, ytest = get_data_split(base_path, split_path, split_type=split, reverse=reverse,
-                                                                  baseline=baseline, dataset=dataset,
-                                                                  predictive_label=args.predictive_label)
-        print(len(Ptrain), len(Pval), len(Ptest), len(ytrain), len(yval), len(ytest))
+        d_ob = 4
+        d_model = d_inp * d_ob
+        nhid = 2 * d_model
+        nlayers = 2
+        nhead = 2
+        dropout = 0.2
 
-        #TODO This line was added to limit the dataset for testing
-        Ptrain = Ptrain[:256] 
-        ytrain = ytrain[:256]
-        Pval = Pval[:256]
-        yval = yval[:256]
-        Ptest = Ptest[:256]
-        ytest = ytest[:256]
-        
-        if dataset == 'P12' or dataset == 'P19' or dataset == 'eICU':
-            T, F = Ptrain[0]['arr'].shape
-            D = len(Ptrain[0]['extended_static'])
-
-            Ptrain_tensor = np.zeros((len(Ptrain), T, F))
-            Ptrain_static_tensor = np.zeros((len(Ptrain), D))
-
-            for i in range(len(Ptrain)):
-                Ptrain_tensor[i] = Ptrain[i]['arr']
-                Ptrain_static_tensor[i] = Ptrain[i]['extended_static']
-
-            mf, stdf = getStats(Ptrain_tensor)
-            ms, ss = getStats_static(Ptrain_static_tensor, dataset=dataset)
-
-            Ptrain_tensor, Ptrain_static_tensor, Ptrain_time_tensor, ytrain_tensor = tensorize_normalize(Ptrain, ytrain, mf,
-                                                                                                         stdf, ms, ss)
-            Pval_tensor, Pval_static_tensor, Pval_time_tensor, yval_tensor = tensorize_normalize(Pval, yval, mf, stdf, ms, ss)
-            Ptest_tensor, Ptest_static_tensor, Ptest_time_tensor, ytest_tensor = tensorize_normalize(Ptest, ytest, mf, stdf, ms,
-                                                                                              ss)
+        if dataset == 'P12':
+            max_len = 215
+            n_classes = 2
+        elif dataset == 'P19':
+            max_len = 60
+            n_classes = 2
+        elif dataset == 'eICU':
+            max_len = 300
+            n_classes = 2
         elif dataset == 'PAM':
-            T, F = Ptrain[0].shape
-            D = 1
+            max_len = 600
+            n_classes = 8
 
-            Ptrain_tensor = Ptrain
-            Ptrain_static_tensor = np.zeros((len(Ptrain), D))
+        aggreg = 'mean'
 
-            mf, stdf = getStats(Ptrain)
-            Ptrain_tensor, Ptrain_static_tensor, Ptrain_time_tensor, ytrain_tensor = tensorize_normalize_other(Ptrain, ytrain, mf, stdf)
-            Pval_tensor, Pval_static_tensor, Pval_time_tensor, yval_tensor = tensorize_normalize_other(Pval, yval, mf, stdf)
-            Ptest_tensor, Ptest_static_tensor, Ptest_time_tensor, ytest_tensor = tensorize_normalize_other(Ptest, ytest, mf, stdf)
+        MAX = 100
 
-        global_structure = torch.ones(d_inp, d_inp)
+        n_runs = 1
+        n_splits = 5
+        subset = False
 
-        # remove part of variables in validation and test set
-        if missing_ratio > 0:
-            num_all_features =int(Pval_tensor.shape[2] / 2)
-            num_missing_features = round(missing_ratio * num_all_features)
-            if feature_removal_level == 'sample':
-                for i, patient in enumerate(Pval_tensor):
-                    idx = np.random.choice(num_all_features, num_missing_features, replace=False)
-                    patient[:, idx] = torch.zeros(Pval_tensor.shape[1], num_missing_features)
-                    Pval_tensor[i] = patient
-                for i, patient in enumerate(Ptest_tensor):
-                    idx = np.random.choice(num_all_features, num_missing_features, replace=False)
-                    patient[:, idx] = torch.zeros(Ptest_tensor.shape[1], num_missing_features)
-                    Ptest_tensor[i] = patient
-            elif feature_removal_level == 'set':
-                density_score_indices = np.load('./baselines/saved/IG_density_scores_' + dataset + '.npy', allow_pickle=True)[:, 0]
-                idx = density_score_indices[:num_missing_features].astype(int)
-                Pval_tensor[:, :, idx] = torch.zeros(Pval_tensor.shape[0], Pval_tensor.shape[1], num_missing_features)
-                Ptest_tensor[:, :, idx] = torch.zeros(Ptest_tensor.shape[0], Ptest_tensor.shape[1], num_missing_features)
+        for k in range(n_splits):
+            split_idx = k + 1
+            print('Split id: %d' % split_idx)
+            if dataset == 'P12':
+                if subset == True:
+                    split_path = '/splits/phy12_split_subset' + str(split_idx) + '.npy'
+                else:
+                    split_path = '/splits/phy12_split' + str(split_idx) + '.npy'
+            elif dataset == 'P19':
+                split_path = '/splits/phy19_split' + str(split_idx) + '_new.npy'
+            elif dataset == 'eICU':
+                split_path = '/splits/eICU_split' + str(split_idx) + '.npy'
+            elif dataset == 'PAM':
+                split_path = '/splits/PAM_split_' + str(split_idx) + '.npy'
 
-        Ptrain_tensor = Ptrain_tensor.permute(1, 0, 2)
-        Pval_tensor = Pval_tensor.permute(1, 0, 2)
-        Ptest_tensor = Ptest_tensor.permute(1, 0, 2)
+            # prepare the data:
+            Ptrain, Pval, Ptest, ytrain, yval, ytest = get_data_split(base_path, split_path, split_type=split, reverse=reverse,
+                                                                    baseline=baseline, dataset=dataset,
+                                                                    predictive_label=args["predictive_label"],gender=args["gender"])
+            print(len(Ptrain), len(Pval), len(Ptest), len(ytrain), len(yval), len(ytest))
 
-        Ptrain_time_tensor = Ptrain_time_tensor.squeeze(2).permute(1, 0)
-        Pval_time_tensor = Pval_time_tensor.squeeze(2).permute(1, 0)
-        Ptest_time_tensor = Ptest_time_tensor.squeeze(2).permute(1, 0)
+            #TODO This line was added to limit the dataset for testing
+            Ptrain = Ptrain[:256] 
+            ytrain = ytrain[:256]
+            Pval = Pval[:256]
+            yval = yval[:256]
+            Ptest = Ptest[:256]
+            ytest = ytest[:256]
+            
+            if dataset == 'P12' or dataset == 'P19' or dataset == 'eICU':
+                T, F = Ptrain[0]['arr'].shape
+                D = len(Ptrain[0]['extended_static'])
 
-        for m in range(n_runs):
-            print('- - Run %d - -' % (m + 1))
+                Ptrain_tensor = np.zeros((len(Ptrain), T, F))
+                Ptrain_static_tensor = np.zeros((len(Ptrain), D))
+
+                for i in range(len(Ptrain)):
+                    Ptrain_tensor[i] = Ptrain[i]['arr']
+                    Ptrain_static_tensor[i] = Ptrain[i]['extended_static']
+
+                mf, stdf = getStats(Ptrain_tensor)
+                ms, ss = getStats_static(Ptrain_static_tensor, dataset=dataset)
+
+                Ptrain_tensor, Ptrain_static_tensor, Ptrain_time_tensor, ytrain_tensor = tensorize_normalize(Ptrain, ytrain, mf,
+                                                                                                            stdf, ms, ss)
+                Pval_tensor, Pval_static_tensor, Pval_time_tensor, yval_tensor = tensorize_normalize(Pval, yval, mf, stdf, ms, ss)
+                Ptest_tensor, Ptest_static_tensor, Ptest_time_tensor, ytest_tensor = tensorize_normalize(Ptest, ytest, mf, stdf, ms,
+                                                                                                ss)
+            elif dataset == 'PAM':
+                T, F = Ptrain[0].shape
+                D = 1
+
+                Ptrain_tensor = Ptrain
+                Ptrain_static_tensor = np.zeros((len(Ptrain), D))
+
+                mf, stdf = getStats(Ptrain)
+                Ptrain_tensor, Ptrain_static_tensor, Ptrain_time_tensor, ytrain_tensor = tensorize_normalize_other(Ptrain, ytrain, mf, stdf)
+                Pval_tensor, Pval_static_tensor, Pval_time_tensor, yval_tensor = tensorize_normalize_other(Pval, yval, mf, stdf)
+                Ptest_tensor, Ptest_static_tensor, Ptest_time_tensor, ytest_tensor = tensorize_normalize_other(Ptest, ytest, mf, stdf)
+
+            global_structure = torch.ones(d_inp, d_inp)
+            
+            # Check the shape of the tensors
+            #print("Training tensor shape:", Ptrain_tensor.shape)  # Expecting something like (256, T, F) where T is time steps and F is features
+            #print("Validation tensor shape:", Pval_tensor.shape)
+            #print("Test tensor shape:", Ptest_tensor.shape)
+
+            # remove part of variables in validation and test set
+            if missing_ratio > 0:
+                num_all_features =int(Pval_tensor.shape[2] / 2)
+                num_missing_features = round(missing_ratio * num_all_features)
+                if feature_removal_level == 'sample':
+                    for i, patient in enumerate(Pval_tensor):
+                        idx = np.random.choice(num_all_features, num_missing_features, replace=False)
+                        patient[:, idx] = torch.zeros(Pval_tensor.shape[1], num_missing_features)
+                        Pval_tensor[i] = patient
+                    for i, patient in enumerate(Ptest_tensor):
+                        idx = np.random.choice(num_all_features, num_missing_features, replace=False)
+                        patient[:, idx] = torch.zeros(Ptest_tensor.shape[1], num_missing_features)
+                        Ptest_tensor[i] = patient
+                elif feature_removal_level == 'set':
+                    density_score_indices = np.load('Raindrop/code/baselines/saved/IG_density_scores_' + dataset + '.npy', allow_pickle=True)[:, 0]
+                    idx = density_score_indices[:num_missing_features].astype(int)
+                    Pval_tensor[:, :, idx] = torch.zeros(Pval_tensor.shape[0], Pval_tensor.shape[1], num_missing_features)
+                    Ptest_tensor[:, :, idx] = torch.zeros(Ptest_tensor.shape[0], Ptest_tensor.shape[1], num_missing_features)
+
+            Ptrain_tensor = Ptrain_tensor.permute(1, 0, 2)
+            Pval_tensor = Pval_tensor.permute(1, 0, 2)
+            Ptest_tensor = Ptest_tensor.permute(1, 0, 2)
+
+            Ptrain_time_tensor = Ptrain_time_tensor.squeeze(2).permute(1, 0)
+            Pval_time_tensor = Pval_time_tensor.squeeze(2).permute(1, 0)
+            Ptest_time_tensor = Ptest_time_tensor.squeeze(2).permute(1, 0)
+
+            
+            print('- - Run %d - -' % (1))
 
             if dataset == 'P12' or dataset == 'P19' or dataset == 'eICU':
                 model = Raindrop_v2(d_inp, d_model, nhead, nhid, nlayers, dropout, max_len,
@@ -263,8 +242,8 @@ for missing_ratio in missing_ratios:
             criterion = torch.nn.CrossEntropyLoss().cuda()
             optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
             scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.1,
-                                                                   patience=1, threshold=0.0001, threshold_mode='rel',
-                                                                   cooldown=0, min_lr=1e-8, eps=1e-08, verbose=True)
+                                                                patience=1, threshold=0.0001, threshold_mode='rel',
+                                                                cooldown=0, min_lr=1e-8, eps=1e-08, verbose=True)
 
             idx_0 = np.where(ytrain == 0)[0]
             idx_1 = np.where(ytrain == 1)[0]
@@ -288,13 +267,11 @@ for missing_ratio in missing_ratios:
             elif strategy == 3:
                 n_batches = 30
 
-            best_aupr_val = best_auc_val = 0.0
-            best_loss_val = 100.0
+            best_auc_val = 0.0
             print('Stop epochs: %d, Batches/epoch: %d, Total batches: %d' % (num_epochs, n_batches, num_epochs * n_batches))
 
-            start = time.time()
-            if wandb:
-                wandb.watch(model)
+            best_model_state_dict = None  # Variable to store the best model's state dictionary
+
             for epoch in range(num_epochs):
                 model.train()
 
@@ -317,10 +294,10 @@ for missing_ratio in missing_ratios:
 
                     if dataset == 'P12' or dataset == 'P19' or dataset == 'eICU':
                         P, Ptime, Pstatic, y = Ptrain_tensor[:, idx, :].cuda(), Ptrain_time_tensor[:, idx].cuda(), \
-                                               Ptrain_static_tensor[idx].cuda(), ytrain_tensor[idx].cuda()
+                                            Ptrain_static_tensor[idx].cuda(), ytrain_tensor[idx].cuda()
                     elif dataset == 'PAM':
                         P, Ptime, Pstatic, y = Ptrain_tensor[:, idx, :].cuda(), Ptrain_time_tensor[:, idx].cuda(), \
-                                               None, ytrain_tensor[idx].cuda()
+                                            None, ytrain_tensor[idx].cuda()
 
                     lengths = torch.sum(Ptime > 0, dim=0)
 
@@ -335,19 +312,17 @@ for missing_ratio in missing_ratios:
                     train_probs = torch.squeeze(torch.sigmoid(outputs))
                     train_probs = train_probs.cpu().detach().numpy()
                     train_y = y.cpu().detach().numpy()
-                    train_auroc = roc_auc_score(train_y, train_probs[:, 1])
-                    train_auprc = average_precision_score(train_y, train_probs[:, 1])
+
                 elif dataset == 'PAM':
                     train_probs = torch.squeeze(nn.functional.softmax(outputs, dim=1))
                     train_probs = train_probs.cpu().detach().numpy()
                     train_y = y.cpu().detach().numpy()
-                    train_auroc = roc_auc_score(one_hot(train_y), train_probs)
-                    train_auprc = average_precision_score(one_hot(train_y), train_probs)
 
-                if wandb:
-                    wandb.log({"train_loss": loss.item(), "train_auprc": train_auprc, "train_auroc": train_auroc})
-                if epoch == 0 or epoch == num_epochs - 1:
-                    print(confusion_matrix(train_y, np.argmax(train_probs, axis=1), labels=[0, 1]))
+                if epoch == num_epochs - 1:
+                    print("Training appending")
+                    all_embeddings.append(model.get_sensor_embeddings())
+                    all_labels.append(ytrain_tensor)
+                    #print(confusion_matrix(train_y, np.argmax(train_probs, axis=1), labels=[0, 1]))
 
                 """Validation"""
                 model.eval()
@@ -370,8 +345,6 @@ for missing_ratio in missing_ratios:
                                                                                                         val_loss.item(),
                                                                                                         aupr_val * 100,
                                                                                                         auc_val * 100))
-                        if wandb:
-                            wandb.log({"val_loss": val_loss.item(), "val_auprc": aupr_val, "val_auroc": auc_val})
 
                         scheduler.step(aupr_val)
                         if auc_val > best_auc_val:
@@ -379,83 +352,20 @@ for missing_ratio in missing_ratios:
                             print(
                                 "**[S] Epoch %d, aupr_val: %.4f, auc_val: %.4f **" % (
                                 epoch, aupr_val * 100, auc_val * 100))
-                            torch.save(model.state_dict(), model_path + arch + '_' + str(split_idx) + '.pt')
+                            best_model_state_dict = model.state_dict()  # Store the best model's state dict
 
-            end = time.time()
-            time_elapsed = end - start
-            print('Total Time elapsed: %.3f mins' % (time_elapsed / 60.0))
+                        if epoch == num_epochs - 1:
+                            print("Validation appending")
+                            all_embeddings.append(model.get_sensor_embeddings())
+                            all_labels.append(yval_tensor)
+            
+            # to save model once
+            torch.save(best_model_state_dict, model_path + arch + '_' + str(split_idx) + '.pt')
 
             """testing"""
-            model.load_state_dict(torch.load(model_path + arch + '_' + str(split_idx) + '.pt'))
-            model.eval()
+            # No need for testing really here
 
-            with torch.no_grad():
-                out_test = evaluate(model, Ptest_tensor, Ptest_time_tensor, Ptest_static_tensor, n_classes=n_classes, static=static_info).numpy()
-                ypred = np.argmax(out_test, axis=1)
+        # # save in numpy file
+        # np.save('./results/' + arch + '_phy12_setfunction.npy', [acc_vec, auprc_vec, auroc_vec])
 
-                denoms = np.sum(np.exp(out_test), axis=1).reshape((-1, 1))
-                probs = np.exp(out_test) / denoms
-
-                acc = np.sum(ytest.ravel() == ypred.ravel()) / ytest.shape[0]
-
-                if dataset == 'P12' or dataset == 'P19' or dataset == 'eICU':
-                    auc = roc_auc_score(ytest, probs[:, 1])
-                    aupr = average_precision_score(ytest, probs[:, 1])
-                elif dataset == 'PAM':
-                    auc = roc_auc_score(one_hot(ytest), probs)
-                    aupr = average_precision_score(one_hot(ytest), probs)
-                    precision = precision_score(ytest, ypred, average='macro', )
-                    recall = recall_score(ytest, ypred, average='macro', )
-                    F1 = f1_score(ytest, ypred, average='macro', )
-                    print('Testing: Precision = %.2f | Recall = %.2f | F1 = %.2f' % (precision * 100, recall * 100, F1 * 100))
-
-                print('Testing: AUROC = %.2f | AUPRC = %.2f | Accuracy = %.2f' % (auc * 100, aupr * 100, acc * 100))
-                print('classification report', classification_report(ytest, ypred))
-                print(confusion_matrix(ytest, ypred, labels=list(range(n_classes))))
-
-            # store
-            acc_arr[k, m] = acc * 100
-            auprc_arr[k, m] = aupr * 100
-            auroc_arr[k, m] = auc * 100
-            if dataset == 'PAM':
-                precision_arr[k, m] = precision * 100
-                recall_arr[k, m] = recall * 100
-                F1_arr[k, m] = F1 * 100
-
-    # pick best performer for each split based on max AUPRC
-    idx_max = np.argmax(auprc_arr, axis=1)
-    acc_vec = [acc_arr[k, idx_max[k]] for k in range(n_splits)]
-    auprc_vec = [auprc_arr[k, idx_max[k]] for k in range(n_splits)]
-    auroc_vec = [auroc_arr[k, idx_max[k]] for k in range(n_splits)]
-    if dataset == 'PAM':
-        precision_vec = [precision_arr[k, idx_max[k]] for k in range(n_splits)]
-        recall_vec = [recall_arr[k, idx_max[k]] for k in range(n_splits)]
-        F1_vec = [F1_arr[k, idx_max[k]] for k in range(n_splits)]
-
-    print("missing ratio:{}, split type:{}, reverse:{}, using baseline:{}".format(missing_ratio, split, reverse,
-                                                                                  baseline))
-    print('args.dataset, args.splittype, args.reverse, args.withmissingratio, args.feature_removal_level',
-          args.dataset, args.splittype, args.reverse, args.withmissingratio, args.feature_removal_level)
-
-    # display mean and standard deviation
-    mean_acc, std_acc = np.mean(acc_vec), np.std(acc_vec)
-    mean_auprc, std_auprc = np.mean(auprc_vec), np.std(auprc_vec)
-    mean_auroc, std_auroc = np.mean(auroc_vec), np.std(auroc_vec)
-    print('------------------------------------------')
-    print('Accuracy = %.1f +/- %.1f' % (mean_acc, std_acc))
-    print('AUPRC    = %.1f +/- %.1f' % (mean_auprc, std_auprc))
-    print('AUROC    = %.1f +/- %.1f' % (mean_auroc, std_auroc))
-    if dataset == 'PAM':
-        mean_precision, std_precision = np.mean(precision_vec), np.std(precision_vec)
-        mean_recall, std_recall = np.mean(recall_vec), np.std(recall_vec)
-        mean_F1, std_F1 = np.mean(F1_vec), np.std(F1_vec)
-        print('Precision = %.1f +/- %.1f' % (mean_precision, std_precision))
-        print('Recall    = %.1f +/- %.1f' % (mean_recall, std_recall))
-        print('F1        = %.1f +/- %.1f' % (mean_F1, std_F1))
-
-    # Mark the run as finished
-    if wandb:
-        wandb.finish()
-
-    # # save in numpy file
-    # np.save('./results/' + arch + '_phy12_setfunction.npy', [acc_vec, auprc_vec, auroc_vec])
+        return {"samples": all_embeddings, "labels": all_labels}

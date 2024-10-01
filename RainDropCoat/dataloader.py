@@ -8,7 +8,7 @@ import numpy as np
 
 
 class Load_Dataset(Dataset):
-    def __init__(self, dataset, normalize):
+    def __init__(self, dataset, normalize, sequence_len, sampling_rate=20):
         super(Load_Dataset, self).__init__()
 
         X_train = dataset["samples"]
@@ -42,12 +42,21 @@ class Load_Dataset(Dataset):
 
         self.len = X_train.shape[0]
 
+        # Generate timestamps
+        time_steps = torch.arange(0, sequence_len) / sampling_rate 
+        self.timestamps = time_steps.unsqueeze(0).repeat(self.len, 1)
+
+        
+        # Calculate lengths (all samples have the full length in this case)
+        self.lengths = torch.full((self.len,), sequence_len, dtype=torch.long) 
+
     def __getitem__(self, index):
         if self.transform is not None:
             output = self.transform(self.x_data[index].view(self.num_channels, -1, 1))
             self.x_data[index] = output.view(self.x_data[index].shape)
 
-        return self.x_data[index].float(), self.y_data[index].long()
+        # return time steps also
+        return self.x_data[index].float(), self.y_data[index].long(), self.timestamps[index], self.lengths[index]
 
     def __len__(self):
         return self.len
@@ -59,8 +68,8 @@ def data_generator(data_path, domain_id, dataset_configs, hparams):
     full_test_dataset = torch.load(os.path.join(data_path, "test_" + domain_id + ".pt"), weights_only=False)
 
     # Loading datasets
-    train_dataset = Load_Dataset(train_dataset, dataset_configs.normalize)
-    full_test_dataset = Load_Dataset(full_test_dataset, dataset_configs.normalize)
+    train_dataset = Load_Dataset(train_dataset, dataset_configs.normalize, dataset_configs.sequence_len)
+    full_test_dataset = Load_Dataset(full_test_dataset, dataset_configs.normalize, dataset_configs.sequence_len)
 
     # Split TEST data into train and validation
     val_size = int(len(full_test_dataset) * 0.2)  # 20% for validation
