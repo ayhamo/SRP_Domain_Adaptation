@@ -1,5 +1,5 @@
 from torch.nn.parameter import Parameter
-from torch_geometric.nn.inits import uniform, glorot, zeros, ones, reset
+from torch_geometric.nn.inits import glorot
 from torch.nn import init
 import math
 from typing import Union, Tuple, Optional
@@ -11,7 +11,7 @@ from torch.nn import Linear
 from torch_sparse import SparseTensor
 from torch_geometric.nn.conv import MessagePassing
 from torch_geometric.utils import softmax
-from torch_scatter import gather_csr, scatter, segment_csr
+from torch_scatter import scatter
 
 
 class Observation_progation(MessagePassing):

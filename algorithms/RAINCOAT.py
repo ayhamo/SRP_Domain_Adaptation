@@ -64,6 +64,9 @@ class CNN(nn.Module):
     def __init__(self, configs):
         super(CNN, self).__init__()
 
+        # Mish: A Self Regularized Non-Monotonic Activation Function
+        # https://arxiv.org/abs/1908.08681
+
         self.conv_block1 = nn.Sequential(
             nn.Conv1d(configs.input_channels, configs.mid_channels, kernel_size=configs.kernel_size,
                       stride=configs.stride, bias=False, padding=(configs.kernel_size // 2)),
@@ -178,6 +181,9 @@ class RAINCOAT(Algorithm):
             lr=hparams["learning_rate"],
             weight_decay=hparams["weight_decay"]
         )
+
+        # Super-Convergence: Very Fast Training of Neural Networks Using Large Learning Rates".
+        # https://arxiv.org/abs/1708.07120
 
         self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
             self.optimizer,
