@@ -5,8 +5,8 @@ import torch.nn.functional as F
 from torch.nn.parameter import Parameter
 from torch_geometric.nn.inits import glorot
 
-from Raindrop.code.models_rd import PositionalEncodingTF
-from Raindrop.code.Ob_propagation import Observation_progation
+from Raindrop.models_rd import PositionalEncodingTF
+from Raindrop.Ob_propagation import Observation_progation
 
 
 class Raindrop_v2(nn.Module):
@@ -129,7 +129,7 @@ class Raindrop_v2(nn.Module):
             distance = 0
         elif step1 == True:
             adj = self.global_structure.to(self.device)
-            adj[torch.eye(self.d_inp).byte()] = 1
+            adj[torch.eye(self.d_inp).bool()] = 1
 
             edge_index = torch.nonzero(adj).T
             edge_weights = adj[edge_index[0], edge_index[1]]
@@ -175,6 +175,9 @@ class Raindrop_v2(nn.Module):
             output = torch.cat([extend_output, extended_pe], dim=-1)
             output = output.view(-1, batch_size, self.d_inp*(self.d_ob+16))
         else:
+            output = output.to(self.device)
+            pe = pe.to(self.device)
+
             output = torch.cat([output, pe], axis=2)
 
         step2 = True

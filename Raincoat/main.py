@@ -2,12 +2,8 @@
 
 # pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 
-# for raindrop:
-# pip3 install torch-scatter torch-sparse -f https://data.pyg.org/whl/torch-2.4.0+cu121.html
-
 # pip3 install -r requirement.txt
 
-# python Raindrop/code/Raindrop.py
 
 import argparse
 from trainers.trainer import cross_domain_trainer

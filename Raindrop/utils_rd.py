@@ -20,7 +20,7 @@ def random_split(n=11988, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1):
     return idx_train, idx_val, idx_test
 
 
-def get_data_split(base_path, split_path, split_type='random', reverse=False, baseline=True, dataset='P12', predictive_label='mortality', gender="both"):
+def get_data_split(base_path, split_path, split_type='random', reverse=False, baseline=True, dataset='P12', predictive_label='mortality'):
     # load data
     if dataset == 'P12':
         Pdict_list = np.load(base_path + '/processed_data/PTdict_list.npy', allow_pickle=True)
@@ -39,7 +39,6 @@ def get_data_split(base_path, split_path, split_type='random', reverse=False, ba
         arr_outcomes = np.load(base_path + '/processed_data/arr_outcomes.npy', allow_pickle=True)
         dataset_prefix = ''  # not applicable
 
-    # This creates the files for gender and age, already done so no need for it
     show_statistics = False
     if show_statistics:
         idx_under_65 = []
@@ -99,7 +98,7 @@ def get_data_split(base_path, split_path, split_type='random', reverse=False, ba
     if baseline==True:
         BL_path = ''
     else:
-        BL_path = 'Raindrop/code/baselines/'
+        BL_path = 'baselines/'
 
     if split_type == 'random':
         # load random indices from a split
@@ -116,42 +115,16 @@ def get_data_split(base_path, split_path, split_type='random', reverse=False, ba
         idx_val = idx_vt[:round(len(idx_vt) / 2)]
         idx_test = idx_vt[round(len(idx_vt) / 2):]
     elif split_type == 'gender':
+        if reverse == False:
+            idx_train = np.load(BL_path+'saved/' + dataset_prefix + 'idx_male.npy', allow_pickle=True)
+            idx_vt = np.load(BL_path+'saved/' + dataset_prefix + 'idx_female.npy', allow_pickle=True)
+        elif reverse == True:
+            idx_train = np.load(BL_path+'saved/' + dataset_prefix + 'idx_female.npy', allow_pickle=True)
+            idx_vt = np.load(BL_path+'saved/' + dataset_prefix + 'idx_male.npy', allow_pickle=True)
 
-        r""" 
-        prevoius Behaviour would load male and females as train / test & validation
-        in order to make soruce/target, we will change it to only load a single gender
-        and split it into train/validation, since we do not need test
-        we do that for both male and female, and we would then have male/female embeddings
-        """
-
-        if gender == 'male':
-            idx_train = np.load(BL_path + 'saved/' + dataset_prefix + 'idx_male.npy', allow_pickle=True)
-        elif gender == 'female':
-            idx_train = np.load(BL_path + 'saved/' + dataset_prefix + 'idx_female.npy', allow_pickle=True)
-        else: # gender == 'both' (original logic)
-            if reverse == False:
-                idx_train = np.load(BL_path+'saved/' + dataset_prefix + 'idx_male.npy', allow_pickle=True)
-                idx_vt = np.load(BL_path+'saved/' + dataset_prefix + 'idx_female.npy', allow_pickle=True)
-            elif reverse == True:
-                idx_train = np.load(BL_path+'saved/' + dataset_prefix + 'idx_female.npy', allow_pickle=True)
-                idx_vt = np.load(BL_path+'saved/' + dataset_prefix + 'idx_male.npy', allow_pickle=True)
-        
-        if(gender == "both"):
-            # Old Behaviour
-            np.random.shuffle(idx_vt)
-            idx_val = idx_vt[:round(len(idx_vt) / 2)]
-            idx_test = idx_vt[round(len(idx_vt) / 2):]
-        else:
-            # New Behaviour with male/female only
-            np.random.shuffle(idx_train)
-            
-            n_samples = len(idx_train)
-            n_val = round(n_samples * 0.2)  # 20% for validation
-            idx_train = idx_train[n_val:]
-            idx_val = idx_train[:n_val]
-
-            # Assign validation indices to test as well
-            idx_test = idx_val 
+        np.random.shuffle(idx_vt)
+        idx_val = idx_vt[:round(len(idx_vt) / 2)]
+        idx_test = idx_vt[round(len(idx_vt) / 2):]
 
     # extract train/val/test examples
     Ptrain = Pdict_list[idx_train]
@@ -183,8 +156,8 @@ def getStats(P_tensor):
         vals_f = Pf[f, :]
         vals_f = vals_f[vals_f > 0]
         mf[f] = np.mean(vals_f)
-        #TODO .item() was added to fix numpy error
-        stdf[f] = np.max([stdf[f].item(), eps])
+        stdf[f] = np.std(vals_f)
+        stdf[f] = np.max([stdf[f], eps])
     return mf, stdf
 
 
@@ -320,7 +293,7 @@ def evaluate(model, P_tensor, P_time_tensor, P_static_tensor, batch_size=100, n_
         if P_static_tensor is not None:
             Pstatic = P_static_tensor[start:start + batch_size]
         lengths = torch.sum(Ptime > 0, dim=0)
-        middleoutput, _, sensor_embeddings = model.forward(P, Pstatic, Ptime, lengths)
+        middleoutput, _, _ = model.forward(P, Pstatic, Ptime, lengths)
         out[start:start + batch_size] = middleoutput.detach().cpu()
         start += batch_size
     if rem > 0:
@@ -329,7 +302,7 @@ def evaluate(model, P_tensor, P_time_tensor, P_static_tensor, batch_size=100, n_
         if P_static_tensor is not None:
             Pstatic = P_static_tensor[start:start + batch_size]
         lengths = torch.sum(Ptime > 0, dim=0)
-        whatever, _, sensor_embeddings = model.forward(P, Pstatic, Ptime, lengths)
+        whatever, _, _ = model.forward(P, Pstatic, Ptime, lengths)
         out[start:start + rem] = whatever.detach().cpu()
     return out
 
@@ -345,4 +318,3 @@ def evaluate_standard(model, P_tensor, P_time_tensor, P_static_tensor, batch_siz
     lengths = torch.sum(P_time_tensor > 0, dim=0)
     out, _, _ = model.forward(P_tensor, P_static_tensor, P_time_tensor, lengths)
     return out
-

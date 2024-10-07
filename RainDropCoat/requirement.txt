@@ -5,3 +5,4 @@ skorch
 matplotlib
 diptest
 ipykernel
+torch_geometric

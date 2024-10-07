@@ -72,11 +72,11 @@ class tf_encoder(nn.Module):
         self.bn_freq = nn.BatchNorm1d(configs.fourier_modes*2)   # It doubles because frequency features contain both amplitude and phase
         self.avg = nn.Conv1d(self.width, 1, kernel_size=3 ,
                   stride=configs.stride, bias=False, padding=(3 // 2))
-
+        
         # No longer need CNN, but we will use raindrop
-        # Integrate RAINDROP
+        # channels, time lengths and batch size
         self.raindrop = Raindrop_v2(
-            d_inp=configs.input_channels,             # Number of input sensor channels (3 for WISDM)
+            d_inp= 3,                                    # Number of input sensor channels # Single sensor 
             d_model=configs.final_out_channels,        # Should match CNN output dimension (128 for WISDM) 
             nhead=4,                                  # Number of attention heads (can be adjusted)
             nhid=2 * configs.final_out_channels,       # Hidden dimension in transformer (256 for WISDM)
@@ -88,9 +88,9 @@ class tf_encoder(nn.Module):
             perc=0.5,                                 # Percentage of edges to prune in RAINDROP (can be adjusted)
             aggreg='mean',                           # Aggregation method for sensor embeddings ('mean' is common)
             n_classes=configs.num_classes,            # Number of output classes (6 for WISDM)
-            global_structure=None,                   # Initialized later in RAINCOAT
+            global_structure=torch.ones(1, 1),      # Trivial graph: single node with self-connections,                   # Initialized later in RAINCOAT
             sensor_wise_mask=False,                  # Not using sensor-wise masks in this integration
-            static=False                              # No static features in WISDM (for now)
+            static=False,                              # No static features in WISDM (for now)
             device = device
         )
 
@@ -99,10 +99,6 @@ class tf_encoder(nn.Module):
         ef, out_ft = self.freq_feature(src)
         ef = F.relu(self.bn_freq(self.avg(ef).squeeze()))
 
-        # Reshape src for RAINDROP
-        src = src.permute(2, 0, 1) # Now shape is [sequence_length, batch_size, input_channels]
-
-        # Use RAINDROP for time-domain feature extraction
         et, _, _ = self.raindrop(src, static, times, lengths)
 
 
@@ -133,6 +129,9 @@ class tf_decoder(nn.Module):
 
         # Interpolate time features at the given timestamps 
         et_interp = F.interpolate(et.unsqueeze(1), size=len(timestamps), mode='linear', align_corners=True).squeeze(1)
+
+        # Permute dimensions of et_interp before convT
+        et_interp = et_interp.permute(0, 2, 1)  # Now: [batch_size, channels, sequence_length]
 
         # Reconstruct using interpolated time features
         x_high = F.relu(self.bn2(self.convT(et_interp.unsqueeze(2)).permute(0, 2, 1)))  
