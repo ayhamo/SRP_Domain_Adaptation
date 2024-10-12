@@ -69,7 +69,6 @@ class CNN(nn.Module):
         # Mish: A Self Regularized Non-Monotonic Activation Function
         # https://arxiv.org/abs/1908.08681
 
-        # with avg,max,avg,max: Avg Accuracy: 61.995214309540515,Accuracy STD: 3.7143480205996564,Avg F1: 0.40563048363662846,F1 STD: 0.02535063890418734
         self.conv_block1 = nn.Sequential(
             nn.Conv1d(configs.input_channels, configs.mid_channels, kernel_size=configs.kernel_size,
                       stride=configs.stride, bias=False, padding=(configs.kernel_size // 2)),

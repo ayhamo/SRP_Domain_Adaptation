@@ -114,7 +114,7 @@ class WISDM(object):
         self.stride = 1
         self.dropout = 0.5
         self.fourier_modes = 64
-        self.fraction_order = 0.8
+        self.fraction_order = 0.4
         
         # features
         self.mid_channels = 64
