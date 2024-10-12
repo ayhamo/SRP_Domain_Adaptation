@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from pytorch_metric_learning import losses
+import torch.fft
 
 from .loss import SinkhornDistance
 
@@ -17,27 +18,19 @@ class Algorithm(torch.nn.Module):
 
 # Fractional Fourier Transform, better perfomance
 # http://yoksis.bilkent.edu.tr/pdf/files/16189.pdf
-def frft(x, a):
-    N = x.shape[-1]
-    k = torch.arange(N, device=x.device)
-    exp_term = torch.exp(-1j * torch.pi * a * k**2 / N)
-    x = x * exp_term
-    x_ft = torch.fft.fft(x)
-    x_ft = x_ft * exp_term
-    return torch.fft.ifft(x_ft)
 
 class SpectralConv1d(nn.Module):
-    def __init__(self, in_channels, out_channels, modes1, fl=128):
+    def __init__(self, in_channels, out_channels, modes1, fraction_order):
         super(SpectralConv1d, self).__init__()
-
         """
-        1D Fourier layer. It does FFT, linear transform, and Inverse FFT.
+        1D Fractional Fourier layer. It does FrFT, linear transform, and Inverse FrFT.    
         """
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.modes1 = modes1  #Number of Fourier modes to multiply, at most floor(N/2) + 1
+        self.modes1 = modes1  # Number of Fourier modes to multiply, at most floor(N/2) + 1
+        self.fraction_order = fraction_order  # Fractional order for FrFT
 
-        self.scale = (1 / (in_channels*out_channels))
+        self.scale = (1 / (in_channels * out_channels))
         self.weights1 = nn.Parameter(self.scale * torch.rand(in_channels, out_channels, self.modes1, dtype=torch.cfloat))
         self.pi = torch.acos(torch.zeros(1)).item() * 2
 
@@ -46,14 +39,23 @@ class SpectralConv1d(nn.Module):
         # (batch, in_channel, x ), (in_channel, out_channel, x) -> (batch, out_channel, x)
         return torch.einsum("bix,iox->box", input, weights)
 
+    def frft(self, x, a):
+        """
+        Perform the Fractional Fourier Transform (FrFT) on the input tensor x with order a.
+        """
+        N = x.shape[-1]
+        k = torch.arange(0, N, device=x.device)
+        exp_term = torch.exp(-1j * self.pi * a * k**2 / N)
+        x_ft = torch.fft.fft(x)
+        x_frft = torch.fft.ifft(x_ft * exp_term)
+        return x_frft
+
     def forward(self, x):
         batchsize = x.shape[0]
-        # Compute FrFT coefficients (only part that changed in the code)
+        # Compute Fractional Fourier coefficients up to factor of e^(- something constant)
         x = torch.cos(x)
-
-        # a value (0.8) is a hyper paramter, grid search gave it as best
-        x_frft = frft(x, 0.8)
-        out_frft = torch.zeros(batchsize, self.out_channels, x.size(-1), device=x.device, dtype=torch.cfloat)
+        x_frft = self.frft(x, self.fraction_order)
+        out_frft = torch.zeros(batchsize, self.out_channels, x_frft.size(-1), device=x.device, dtype=torch.cfloat)
         out_frft[:, :, :self.modes1] = self.compl_mul1d(x_frft[:, :, :self.modes1], self.weights1)
         r = out_frft[:, :, :self.modes1].abs()
         p = out_frft[:, :, :self.modes1].angle()
@@ -67,6 +69,7 @@ class CNN(nn.Module):
         # Mish: A Self Regularized Non-Monotonic Activation Function
         # https://arxiv.org/abs/1908.08681
 
+        # with avg,max,avg,max: Avg Accuracy: 61.995214309540515,Accuracy STD: 3.7143480205996564,Avg F1: 0.40563048363662846,F1 STD: 0.02535063890418734
         self.conv_block1 = nn.Sequential(
             nn.Conv1d(configs.input_channels, configs.mid_channels, kernel_size=configs.kernel_size,
                       stride=configs.stride, bias=False, padding=(configs.kernel_size // 2)),
@@ -118,8 +121,9 @@ class tf_encoder(nn.Module):
         self.modes1 = configs.fourier_modes   # Number of low-frequency modes to keep
         self.width = configs.input_channels
         self.length =  configs.sequence_len
+        self.fraction_order = configs.fraction_order
 
-        self.freq_feature = SpectralConv1d(self.width, self.width, self.modes1,self.length)  # Frequency Feature Encoder
+        self.freq_feature = SpectralConv1d(self.width, self.width, self.modes1, self.fraction_order)  # Frequency Feature Encoder
         self.bn_freq = nn.BatchNorm1d(configs.fourier_modes*2)   # It doubles because frequency features contain both amplitude and phase
         self.cnn = CNN(configs)  # Time Feature Encoder
         self.avg = nn.Conv1d(self.width, 1, kernel_size=3 ,
@@ -144,16 +148,36 @@ class tf_decoder(nn.Module):
 
         self.channel_proj = nn.Conv1d(2 * self.input_channels, self.input_channels, kernel_size=1)
 
+        self.fraction_order = configs.fraction_order
+        self.pi = torch.acos(torch.zeros(1)).item() * 2
+
+    def inverse_frft(self, x, a):
+        """
+        Perform the inverse Fractional Fourier Transform (FrFT) on the input tensor x with order a.
+        """
+        N = x.shape[-1]
+        k = torch.arange(0, N, device=x.device)
+        exp_term = torch.exp(1j * self.pi * a * k**2 / N)  # Note the positive sign for inverse
+        x_ft = torch.fft.fft(x)
+        x_inv_frft = torch.fft.ifft(x_ft * exp_term)
+        return x_inv_frft
+        
     def forward(self, f, out_ft):
-        # Reconstruct time series using low-frequency FrFT features
-        a= -0.8
-        x_low_mag = torch.abs(frft(out_ft, a))  # Magnitude
-        x_low_phase = torch.angle(frft(out_ft, a))  # Phase
-        x_low = torch.cat([x_low_mag, x_low_phase], dim=1)  # Concatenate
-        x_low = self.channel_proj(x_low)  # Project back to num_channels
+        # Reconstruct time series by using low frequency features from FrFT
+        x_low_complex = self.inverse_frft(out_ft, self.fraction_order)
+
+        amplitude = x_low_complex.abs()
+        phase = x_low_complex.angle()
+
+        x_low = torch.cat([amplitude, phase], dim=1)
+        x_low = self.channel_proj(x_low)
+        x_low = self.bn1(x_low)
 
         et = f[:, self.modes * 2:]
-        x_high = F.relu(self.bn2(self.convT(et.unsqueeze(2)).permute(0, 2, 1)))  # Reconstruct time series using time features for high-frequency patterns.
+
+        # Reconstruct time series by using time features for high frequency patterns
+        x_high = F.relu(self.bn2(self.convT(et.unsqueeze(2)).permute(0, 2, 1)))
+
         return x_low + x_high
 
 class classifier(nn.Module):
@@ -248,7 +272,6 @@ class RAINCOAT(Algorithm):
         total_loss = lambda1 * recons + lambda2 * sink_loss + lambda3 * loss_cls
         
         self.optimizer.step()
-        self.scheduler.step()
 
         return {
             'Total_loss': total_loss.item(),
@@ -271,6 +294,5 @@ class RAINCOAT(Algorithm):
         recons.backward()
 
         self.coptimizer.step()
-        self.scheduler.step()
 
         return {'Correct_reconstruction_loss': recons.item()}

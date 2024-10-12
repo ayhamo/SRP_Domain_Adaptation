@@ -2,7 +2,6 @@
 wandb = False
 
 if wandb:
-    import wandb
     os.environ['WANDB_SILENT']="true"
 
     wandb.login(key=str('14734fe9c5574e019e8f517149a20d6fe1b2fd0d'))

@@ -2,12 +2,7 @@
 __pycache__/
 
 experiments_logs/
-Raindrop/models/*
-Raindrop/P12data/processed_data/P_list.npy
-Raindrop/P12data/processed_data/PTdict_list.npy
-Raindrop/P19data/processed_data/PT_dict_list_6.npy
-Raindrop/PAMdata/processed_data/AR_8p_8c.mat
-Raindrop/PAMdata/processed_data/PTdict_list.npy
+SRP_Domain_Adaptation.egg-info/
 **/*.ipynb_checkpoints/
 env/
 *.py[cod]

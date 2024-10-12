@@ -5,8 +5,6 @@
 
 # for raindrop:
 # pip3 install torch-scatter torch-sparse -f https://data.pyg.org/whl/torch-2.4.0+cu121.html
-# Non cuda version:
-# ...
 
 # pip3 install -r requirement.txt
 

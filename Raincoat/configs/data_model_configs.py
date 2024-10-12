@@ -113,9 +113,8 @@ class WISDM(object):
         self.kernel_size = 5
         self.stride = 1
         self.dropout = 0.5
-        self.num_classes = 6
-        self.width = 64  # for FNN
         self.fourier_modes = 64
+        self.fraction_order = 0.8
         
         # features
         self.mid_channels = 64
