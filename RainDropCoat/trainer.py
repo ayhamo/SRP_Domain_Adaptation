@@ -104,6 +104,8 @@ class cross_domain_trainer(object):
                 best_f1 = f1
                 self.logger.debug(f"best f1: {best_f1}")
 
+                algorithm.scheduler.step()
+
                 self.best_feature_extractor_state = algorithm.feature_extractor.state_dict()
                 self.best_classifier_state = algorithm.classifier.state_dict()
 
@@ -126,10 +128,13 @@ class cross_domain_trainer(object):
 
             acc, f1 = self.eval(self.trg_val_dl)
 
-            if f1 >= best_f1:
+            if f1 > best_f1:
                 self.logger.debug(f'[Epoch : {epoch}/{self.hparams["corr_epochs"]}]')
                 best_f1 = f1
                 self.logger.debug(f"best f1: {best_f1}")
+
+                algorithm.coscheduler.step()
+                
                 self.best_feature_extractor_state = algorithm.feature_extractor.state_dict()
                 self.best_classifier_state = algorithm.classifier.state_dict()
 

@@ -117,7 +117,7 @@ class cross_domain_trainer(object):
 
             acc, f1 = self.eval(self.trg_val_dl)
 
-            if f1 >= best_f1:
+            if f1 > best_f1:
                 self.logger.debug(f'[Epoch : {epoch}/{self.hparams["corr_epochs"]}]')
                 best_f1 = f1
                 self.logger.debug(f"best f1: {best_f1}")

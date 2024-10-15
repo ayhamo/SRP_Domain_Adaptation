@@ -50,9 +50,9 @@ class Raindrop_v2(nn.Module):
         self.pos_encoder = PositionalEncodingTF(d_pe, max_len, MAX)
 
         if self.sensor_wise_mask == True:
-            encoder_layers = TransformerEncoderLayer(self.d_inp*(self.d_ob+16), nhead, nhid, dropout, batch_first=True)
+            encoder_layers = TransformerEncoderLayer(self.d_inp*(self.d_ob+16), nhead, nhid, dropout)
         else:
-            encoder_layers = TransformerEncoderLayer(d_model+16, nhead, nhid, dropout, batch_first=True)
+            encoder_layers = TransformerEncoderLayer(d_model+16, nhead, nhid, dropout)
 
         self.transformer_encoder = TransformerEncoder(encoder_layers, nlayers)
 
@@ -108,10 +108,6 @@ class Raindrop_v2(nn.Module):
         n_sensor = self.d_inp
 
         src = torch.repeat_interleave(src, self.d_ob, dim=-1)
-
-        print(f"src shape in Raindrop_v2: {src.shape}")
-        print(f"self.R_u shape in Raindrop_v2: {self.R_u.shape}")
-
         h = F.relu(src*self.R_u)
         pe = self.pos_encoder(times)
         if static is not None:
@@ -175,8 +171,8 @@ class Raindrop_v2(nn.Module):
             output = torch.cat([extend_output, extended_pe], dim=-1)
             output = output.view(-1, batch_size, self.d_inp*(self.d_ob+16))
         else:
-            output = output.to(self.device)
-            pe = pe.to(self.device)
+            #output = output.to(self.device)
+            #pe = pe.to(self.device)
 
             output = torch.cat([output, pe], axis=2)
 
@@ -209,16 +205,6 @@ class Raindrop_v2(nn.Module):
 
         if static is not None:
             output = torch.cat([output, emb], dim=1)
-
-        # --------------------------------      
-        r""" Remove the final MLP layer:
-        mlp_static is the final layer used for classification. It takes the aggregated sensor embeddings 
-        (from .cat) and outputs logits for each class.
-
-        That is not needed as we need the feautres, so we return the output before, and it would match our
-        raindrop demensions
-        """
-        #output = self.mlp_static(output)
+        output = self.mlp_static(output)
 
         return output, distance, None
-    
