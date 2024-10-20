@@ -49,7 +49,7 @@ class WISDM():
                 'weight_decay': 1e-4,
                 'learning_rate':1e-3,
                 'scheduler_steps': 32,
-                'coscheduler_steps': 32
+                'coscheduler_steps': 64,
         }
 
 

@@ -13,8 +13,8 @@ from sklearn.metrics import f1_score
 from Raincoat.configs.data_model_configs import get_dataset_class
 from Raincoat.configs.hparams import get_hparams_class
 from Raincoat.algorithms.utils import fix_randomness, starting_logs
+from Raincoat.dataloader.dataloader import data_generator
 
-from dataloader import data_generator
 from raincoat import RAINCOAT
 
 torch.backends.cudnn.benchmark = True
@@ -84,18 +84,14 @@ class cross_domain_trainer(object):
             algorithm.train()
 
              # for loop is defiend becuase some senarios have more than 1 batch and some only have 1 batch
-            for (src_x, src_y, src_times, src_lengths), (trg_x, _, trg_times, trg_lengths) in joint_loaders:
-                src_x, src_y, src_times, src_lengths, trg_x, trg_times, trg_lengths = (
+            for (src_x, src_y), (trg_x, _) in joint_loaders:
+                src_x, src_y, trg_x = (
                     src_x.float().to(self.device),
                     src_y.long().to(self.device),
-                    src_times.float().to(self.device),
-                    src_lengths.long().to(self.device),
                     trg_x.float().to(self.device),
-                    trg_times.float().to(self.device),
-                    trg_lengths.long().to(self.device)
                 )
 
-                losses = algorithm.align(src_x, src_y, src_times, src_lengths, trg_x, trg_times, trg_lengths)
+                losses = algorithm.align(src_x, src_y, trg_x)
 
             acc, f1 = self.eval(self.trg_val_dl)
 
@@ -114,17 +110,13 @@ class cross_domain_trainer(object):
             joint_loaders = zip(self.src_train_dl, self.trg_train_dl)
             algorithm.train()
 
-            for (src_x, src_y, src_times, src_lengths), (trg_x, _, trg_times, trg_lengths) in joint_loaders:
-                src_x, src_y, src_times, src_lengths, trg_x, trg_times, trg_lengths = (
+            for (src_x, src_y), (trg_x, _) in joint_loaders:
+                src_x, src_y, trg_x = (
                     src_x.float().to(self.device),
                     src_y.long().to(self.device),
-                    src_times.float().to(self.device),
-                    src_lengths.long().to(self.device),
                     trg_x.float().to(self.device),
-                    trg_times.float().to(self.device),
-                    trg_lengths.long().to(self.device)
                 )
-                correct_losses = algorithm.correct(src_x, src_y, src_times, src_lengths, trg_x, trg_times, trg_lengths)
+                correct_losses = algorithm.correct(src_x, src_y, trg_x)
 
             acc, f1 = self.eval(self.trg_val_dl)
 
@@ -263,18 +255,15 @@ class cross_domain_trainer(object):
 
         with torch.no_grad():
             # now using datalaoder instead of only test
-            for data, labels, timestamps, lengths in dataloader: # Get timestamps and lengths
-
-                data, labels, timestamps, lengths = (
+            for data, labels in dataloader:
+                data, labels = (
                     data.float().to(self.device),
                     labels.view((-1)).long().to(self.device),
-                    timestamps.float().to(self.device),
-                    lengths.long().to(self.device)
                 )
 
 
                 # forward pass
-                features, _ = feature_extractor(data, None, timestamps, lengths)
+                features, _ = feature_extractor(data)
                 predictions = classifier(features)
 
                 # compute loss

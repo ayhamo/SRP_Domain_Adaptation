@@ -50,9 +50,9 @@ class Raindrop_v2(nn.Module):
         self.pos_encoder = PositionalEncodingTF(d_pe, max_len, MAX)
 
         if self.sensor_wise_mask == True:
-            encoder_layers = TransformerEncoderLayer(self.d_inp*(self.d_ob+16), nhead, nhid, dropout)
+            encoder_layers = TransformerEncoderLayer(self.d_inp * (d_model + d_pe), nhead, nhid, dropout, batch_first=False)
         else:
-            encoder_layers = TransformerEncoderLayer(d_model+16, nhead, nhid, dropout)
+            encoder_layers = TransformerEncoderLayer(d_model + d_pe, nhead, nhid, dropout, batch_first=False)
 
         self.transformer_encoder = TransformerEncoder(encoder_layers, nlayers)
 
@@ -203,8 +203,11 @@ class Raindrop_v2(nn.Module):
         elif masked_agg == False:
             output = r_out[-1, :, :].squeeze(0)
 
+        # since we do not have static feautres, this will not do any changes
         if static is not None:
             output = torch.cat([output, emb], dim=1)
-        output = self.mlp_static(output)
+        
+        
+        #output = self.mlp_static(output)
 
         return output, distance, None

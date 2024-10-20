@@ -5,6 +5,7 @@ from pytorch_metric_learning import losses
 import torch.fft
 
 from Raincoat.algorithms.loss import SinkhornDistance
+from raindrop import Raindrop_v2  # Import Raindrop
 
 class Algorithm(torch.nn.Module):
 
@@ -115,7 +116,7 @@ class CNN(nn.Module):
         return x_flat
 
 class tf_encoder(nn.Module):
-    def __init__(self, configs):
+    def __init__(self, configs, device):
         super(tf_encoder, self).__init__()
         self.modes1 = configs.fourier_modes   # Number of low-frequency modes to keep
         self.width = configs.input_channels
@@ -128,12 +129,69 @@ class tf_encoder(nn.Module):
         self.avg = nn.Conv1d(self.width, 1, kernel_size=3 ,
                   stride=configs.stride, bias=False, padding=(3 // 2))
 
+        d_inp = configs.input_channels
+        d_ob = 38
+        d_model = d_inp * d_ob
+        nhead = 2
+        nhid = 2 * d_model
+        nlayers = 2
+        dropout = 0.2
+        
+        self.projection = nn.Linear(130, 128)  # Project from 136 to 128
+
+        # Initialize Raindrop_v2
+        self.raindrop = Raindrop_v2(
+            d_inp= d_inp,  # WISDM has 3 channels (x, y, z)
+            d_model= d_model,
+            nhead= nhead,
+            nhid= nhid,
+            nlayers= nlayers,
+            dropout= dropout,
+            max_len= configs.sequence_len,
+            d_static=0,  # No static features for WISDM
+            MAX= 100,
+            aggreg='mean',
+            n_classes=configs.num_classes, # We don't need this for feature extraction but it's required by the model, we remove the mlp layer from raindrop so num_class doesn't effect
+            global_structure= torch.ones(d_inp, d_inp),
+            sensor_wise_mask=False,  # Not using sensor-wise masks in this integration
+            static=False,  # No static features for WISDM
+            device= device
+        )
+
 
     def forward(self, x):
         ef, out_ft = self.freq_feature(x)
         ef = F.relu(self.bn_freq(self.avg(ef).squeeze()))
-        et = self.cnn(x)
-        f = torch.concat([ef,et],-1)
+
+        # --- Preprocessing for Raindrop ---
+        batch_size, channels, seq_len = x.shape
+
+        # 1. Permute to (seq_len, batch_size, channels)
+        x_raindrop = x.permute(2, 0, 1) 
+
+        # 2. Create dummy static data
+        dummy_static = None  # Or create a zero tensor if Raindrop requires it
+        
+        # 3. Create dummy times
+        times = torch.arange(seq_len, device=x.device).unsqueeze(1).repeat(1, batch_size).float()
+        
+        # 4. Create lengths (all equal to seq_len)
+        lengths = torch.full((batch_size,), seq_len, device=x.device).long()
+
+        # 5. Create dummy mask, since dataset has no missing values. concatenate with x_raindrop
+        dummy_mask = torch.zeros_like(x_raindrop)
+        x_raindrop = torch.cat([x_raindrop, dummy_mask], dim = 2)
+        
+        # --- Raindrop Feature Extraction ---
+        # this now gives us [32,130], it's impossible to get 128 becuase of WISDM 3 channels
+        # so we project it after down to 128
+        et, _, _ = self.raindrop(x_raindrop, dummy_static, times, lengths)  # Use preprocessed data
+
+        #print(f"et shape at encoder before projection: {et.shape}")
+
+        et = self.projection(et)
+
+        f = torch.concat([ef, et], -1)
         return F.normalize(f), out_ft
 
 class tf_decoder(nn.Module):
@@ -193,7 +251,7 @@ class classifier(nn.Module):
 class RAINCOAT(Algorithm):
     def __init__(self, configs, hparams, device):
         super(RAINCOAT, self).__init__(configs)
-        self.feature_extractor = tf_encoder(configs).to(device)
+        self.feature_extractor = tf_encoder(configs, device).to(device)
         self.decoder = tf_decoder(configs).to(device)
         self.classifier = classifier(configs).to(device)
 
