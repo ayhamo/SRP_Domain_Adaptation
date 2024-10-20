@@ -8,7 +8,7 @@ import torch
 from torch import Tensor
 import torch.nn.functional as F
 from torch.nn import Linear
-from torch_sparse import SparseTensor
+#from torch_sparse import SparseTensor
 from torch_geometric.nn.conv import MessagePassing
 from torch_geometric.utils import softmax
 from torch_scatter import scatter
@@ -126,7 +126,8 @@ class Observation_progation(MessagePassing):
             assert alpha is not None
             if isinstance(edge_index, Tensor):
                 return out, (edge_index, alpha)
-            elif isinstance(edge_index, SparseTensor):
+            elif isinstance(edge_index, None):
+                print("inside here!!")
                 return out, edge_index.set_value(alpha, layout='coo')
         else:
             return out
