@@ -171,9 +171,6 @@ class Raindrop_v2(nn.Module):
             output = torch.cat([extend_output, extended_pe], dim=-1)
             output = output.view(-1, batch_size, self.d_inp*(self.d_ob+16))
         else:
-            #output = output.to(self.device)
-            #pe = pe.to(self.device)
-
             output = torch.cat([output, pe], axis=2)
 
         step2 = True
