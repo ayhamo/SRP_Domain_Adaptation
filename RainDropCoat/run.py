@@ -1,12 +1,12 @@
 # enter env: env\Scripts\Activate  
 
 # for raincoat:
-# pip3 install torch==2.4.1 torchvision==1.19.1 --index-url https://download.pytorch.org/whl/cu121
+# pip3 install torch==2.4.1 torchvision==0.19.1+cu121 --index-url https://download.pytorch.org/whl/cu121
 
 # for raindrop:
 # pip3 install torch-scatter==2.1.2 torch-sparse==0.6.18 -f https://data.pyg.org/whl/torch-2.4.0+cu121.html
 
-# pip3 install -r requirement.txt
+# pip3 install -r RainDropCoat/requirement.txt
 
 # pip3 install -e .
 

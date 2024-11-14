@@ -66,9 +66,121 @@ class SpectralConv1d(nn.Module):
         p = out_frft[:, :, :self.modes1].angle()
         return torch.concat([r, p], -1), out_frft
     
-# implement: InceptionTime: Finding AlexNet for Time Series Classification
-# https://arxiv.org/abs/1909.04939
-# and code taken from https://github.com/hfawaz/InceptionTime and adapted to our code
+class InceptionBlock(nn.Module):
+    def __init__(self, in_channels, nb_filters, kernel_size, use_bottleneck=True, bottleneck_size=32):
+        super(InceptionBlock, self).__init__()
+        self.use_bottleneck = use_bottleneck
+        
+        # Bottleneck layer
+        if use_bottleneck:
+            self.bottleneck = nn.Conv1d(in_channels, bottleneck_size, 1, bias=False)
+            self.in_channels = bottleneck_size
+        else:
+            self.in_channels = in_channels
+            
+        # Each conv branch should output nb_filters channels
+        #kernel_sizes = [kernel_size // (2 ** i) for i in range(3)]
+        kernel_sizes = [40,20,10]
+        self.conv_list = nn.ModuleList([
+            nn.Conv1d(self.in_channels, nb_filters, k, padding= k//2, bias=False)
+            for k in kernel_sizes
+        ])
+        
+        # Maxpool branch
+        self.maxpool = nn.MaxPool1d(3, stride=1, padding=1)
+        self.conv_pool = nn.Conv1d(in_channels, nb_filters, 1, bias=False)
+        
+        # After concatenation, we have nb_filters * 4 channels
+        self.bn = nn.BatchNorm1d(nb_filters * 4)
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        # Bottleneck if used
+        if self.use_bottleneck and x.size(1) > 1:
+            x = self.bottleneck(x)
+            
+        # Parallel convolutions
+        conv_results = [conv(x) for conv in self.conv_list]
+        
+        # Maxpool branch
+        pool = self.maxpool(x)
+        pool = self.conv_pool(pool)
+        conv_results.append(pool)
+        
+        # Concatenate along channel dimension
+        x = torch.cat(conv_results, dim=1)
+        x = self.bn(x)
+        x = self.relu(x)
+        return x
+
+class ShortcutLayer(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(ShortcutLayer, self).__init__()
+        self.conv = nn.Conv1d(in_channels, out_channels, 1, bias=False)
+        self.bn = nn.BatchNorm1d(out_channels)
+        self.relu = nn.ReLU()
+
+    def forward(self, input_tensor, out_tensor):
+        shortcut = self.conv(input_tensor)
+        shortcut = self.bn(shortcut)
+        x = shortcut + out_tensor
+        return self.relu(x)
+
+class Inception_time(nn.Module):
+    def __init__(self, configs):
+        super(Inception_time, self).__init__()
+        self.input_channels = configs.input_channels
+        self.nb_filters = 32
+        self.use_residual = True
+        self.use_bottleneck = True
+        self.depth = 6
+        self.kernel_size = 40
+        
+        # Initial dimensionality adjustment
+        self.init_conv = nn.Sequential(
+            nn.Conv1d(self.input_channels, self.nb_filters, 1, bias=False),
+            nn.BatchNorm1d(self.nb_filters),
+            nn.ReLU()
+        )
+        
+        # Inception blocks with residual connections
+        self.inception_blocks = nn.ModuleList()
+        self.shortcut_layers = nn.ModuleList()
+        
+        input_res_size = self.nb_filters
+        for d in range(self.depth):
+            self.inception_blocks.append(
+                InceptionBlock(
+                    in_channels=self.nb_filters if d == 0 else self.nb_filters * 4,
+                    nb_filters=self.nb_filters,
+                    kernel_size=self.kernel_size,
+                    use_bottleneck=self.use_bottleneck
+                )
+            )
+            
+            if self.use_residual and d % 3 == 2:
+                self.shortcut_layers.append(
+                    ShortcutLayer(input_res_size, self.nb_filters * 4)
+                )
+                input_res_size = self.nb_filters * 4
+                
+        # Output adaptation
+        self.adaptive_pool = nn.AdaptiveAvgPool1d(configs.features_len)
+        
+    def forward(self, x):
+        x = self.init_conv(x)
+        input_res = x
+        
+        for d in range(self.depth):
+            x = self.inception_blocks[d](x)
+            
+            if self.use_residual and d % 3 == 2:
+                x = self.shortcut_layers[d//3](input_res, x)
+                input_res = x
+        
+        x = self.adaptive_pool(x)
+        return x.flatten(1)
+
 class CNN(nn.Module):
     def __init__(self, configs):
         super(CNN, self).__init__()
@@ -136,7 +248,8 @@ class tf_encoder(nn.Module):
                   stride=configs.stride, bias=False, padding=(3 // 2))
         
         # Regular Time Feature Encoder
-        self.inception_time = CNN(configs)
+        self.cnn = CNN(configs).to(device)
+        self.inception_time = Inception_time(configs).to(device)
 
         d_inp = configs.input_channels # number of input features, like WISDM x,y,z (3)
         d_ob = 40
@@ -214,7 +327,8 @@ class tf_encoder(nn.Module):
         else:
             ef, out_ft = self.freq_feature(x)
             ef = F.relu(self.bn_freq(self.avg(ef).squeeze()))
-            et = self.inception_time(x)
+            #et = self.inception_time(x)
+            et = self.cnn(x)
         
 
         f = torch.concat([ef, et], -1)
