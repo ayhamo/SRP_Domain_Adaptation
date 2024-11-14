@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data import Dataset
+from torch.utils.data import random_split
 from torchvision import transforms
-
 
 import os
 import numpy as np
@@ -57,17 +57,26 @@ class Load_Dataset(Dataset):
 def data_generator(data_path, domain_id, dataset_configs, hparams):
     # loading path
     train_dataset = torch.load(os.path.join(data_path, "train_" + domain_id + ".pt"), weights_only=False)
-    test_dataset = torch.load(os.path.join(data_path, "test_" + domain_id + ".pt"), weights_only=False)
+    full_test_dataset = torch.load(os.path.join(data_path, "test_" + domain_id + ".pt"), weights_only=False)
 
     # Loading datasets
     train_dataset = Load_Dataset(train_dataset, dataset_configs.normalize)
-    test_dataset = Load_Dataset(test_dataset, dataset_configs.normalize)
+    full_test_dataset = Load_Dataset(full_test_dataset, dataset_configs.normalize)
+
+    # Skip this for now, makes too many problems since we have subset not dataset object
+    # TODO make a validation here
+    # Split TEST data into test and validation (try to use train instead please)
+    #val_size = int(len(full_test_dataset) * 0.2)  # 20% for validation
+    #test_size = len(full_test_dataset) - val_size
+    #test_dataset, val_dataset = random_split(full_test_dataset, [test_size, val_size])
 
     # Dataloaders
     batch_size = hparams["batch_size"]
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size,
-                                               shuffle=False, drop_last=True, num_workers=0)
-
-    test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size,
+                                               shuffle=True, drop_last=True, num_workers=0)
+    val_loader = torch.utils.data.DataLoader(dataset=full_test_dataset, batch_size=batch_size,
+                                             shuffle=False, drop_last=False, num_workers=0)
+    test_loader = torch.utils.data.DataLoader(dataset=full_test_dataset, batch_size=batch_size,
                                               shuffle=False, drop_last=dataset_configs.drop_last, num_workers=0)
-    return train_loader, test_loader
+    
+    return train_loader, val_loader, test_loader

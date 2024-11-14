@@ -12,7 +12,6 @@
 
 import argparse
 from trainer import cross_domain_trainer
-import pickle
 
 
 parser = argparse.ArgumentParser()
@@ -36,9 +35,4 @@ if __name__ == "__main__":
     # python RainDropCoat/run.py --experiment_description WISDM --dataset WISDM --num_runs 1 --device cuda
     trainer = cross_domain_trainer(args)
     trainer.train()
-    
-    #trainer.visualize()
-    #dic = {'1':trainer.src_all_features,'2':trainer.src_true_labels,'3':trainer.trg_all_features,'4':trainer.trg_true_labels,'acc': trainer.trg_acc_list}
-    #with open('saved_dictionary2.pickle', 'wb') as handle:
-    #    pickle.dump(dic, handle)
     

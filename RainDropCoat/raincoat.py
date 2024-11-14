@@ -9,7 +9,7 @@ from raindrop import Raindrop_v2  # Import Raindrop
 
 import warnings
 warnings.filterwarnings("ignore", message="enable_nested_tensor is True, but self.use_nested_tensor is False because")
-warnings.filterwarnings("ignore", message="Torch was not compiled with flash attention")
+warnings.filterwarnings("ignore", message=".*Torch was not compiled with flash attention.*")
 
 class Algorithm(torch.nn.Module):
 
@@ -65,7 +65,62 @@ class SpectralConv1d(nn.Module):
         r = out_frft[:, :, :self.modes1].abs()
         p = out_frft[:, :, :self.modes1].angle()
         return torch.concat([r, p], -1), out_frft
+    
+# implement: InceptionTime: Finding AlexNet for Time Series Classification
+# https://arxiv.org/abs/1909.04939
+# and code taken from https://github.com/hfawaz/InceptionTime and adapted to our code
+class CNN(nn.Module):
+    def __init__(self, configs):
+        super(CNN, self).__init__()
 
+        # Mish: A Self Regularized Non-Monotonic Activation Function
+        # https://arxiv.org/abs/1908.08681
+
+        self.conv_block1 = nn.Sequential(
+            nn.Conv1d(configs.input_channels, configs.mid_channels, kernel_size=configs.kernel_size,
+                      stride=configs.stride, bias=False, padding=(configs.kernel_size // 2)),
+            nn.BatchNorm1d(configs.mid_channels),
+            nn.Mish(),
+            nn.AdaptiveAvgPool1d(configs.features_len),
+            nn.Dropout(configs.dropout)
+        )
+
+        self.conv_block2 = nn.Sequential(
+            nn.Conv1d(configs.mid_channels, configs.mid_channels*2, kernel_size=8, stride=1, bias=False, padding=4),
+            nn.BatchNorm1d(configs.mid_channels*2),
+            nn.Mish(),
+            nn.MaxPool1d(kernel_size=2, stride=2, padding=1),
+        )
+
+        self.conv_block3 = nn.Sequential(
+            nn.Conv1d(configs.mid_channels*2, configs.mid_channels*2, kernel_size=8, stride=1, bias=False, padding=4),
+            nn.BatchNorm1d(configs.mid_channels*2),
+            nn.Mish(),
+            nn.AdaptiveAvgPool1d(configs.features_len),
+        )
+
+        # New convolutional block that reduces channels back to final_out_channels
+        self.conv_block4 = nn.Sequential(
+            nn.Conv1d(configs.mid_channels*2, configs.final_out_channels, kernel_size=8, stride=1, bias=False, padding=4),
+            nn.BatchNorm1d(configs.final_out_channels),
+            nn.Mish(),
+            nn.MaxPool1d(kernel_size=2, stride=2, padding=1),
+        )
+
+        self.adaptive_pool = nn.AdaptiveAvgPool1d(configs.features_len)
+
+
+    def forward(self, x):
+        x = self.conv_block1(x)
+        x = self.conv_block2(x)
+        x = self.conv_block3(x)
+        x = self.conv_block4(x)
+        
+        x = self.adaptive_pool(x)
+
+        x_flat = x.reshape(x.shape[0], -1)
+        return x_flat
+    
 class tf_encoder(nn.Module):
     def __init__(self, configs, device):
         super(tf_encoder, self).__init__()
@@ -73,11 +128,15 @@ class tf_encoder(nn.Module):
         self.width = configs.input_channels
         self.length =  configs.sequence_len
         self.fraction_order = configs.fraction_order
+        self.is_irregular = configs.is_irregular
 
         self.freq_feature = SpectralConv1d(self.width, self.width, self.modes1, self.fraction_order)  # Frequency Feature Encoder
         self.bn_freq = nn.BatchNorm1d(configs.fourier_modes*2)   # It doubles because frequency features contain both amplitude and phase
         self.avg = nn.Conv1d(self.width, 1, kernel_size=3 ,
                   stride=configs.stride, bias=False, padding=(3 // 2))
+        
+        # Regular Time Feature Encoder
+        self.inception_time = CNN(configs)
 
         d_inp = configs.input_channels # number of input features, like WISDM x,y,z (3)
         d_ob = 40
@@ -87,7 +146,7 @@ class tf_encoder(nn.Module):
         # ^ dimension of feedforward network model
         nlayers = 3
 
-        # Initialize Raindrop_v2
+        # Iregular Time Feature Encoder using Raindrop_v2
         self.raindrop = Raindrop_v2(
             d_inp= d_inp,
             d_model= d_model,
@@ -96,7 +155,7 @@ class tf_encoder(nn.Module):
             nlayers= nlayers,
             dropout= configs.dropout,
             max_len= configs.sequence_len,
-            d_static=0,  # No static features yet
+            d_static=0,  # No static features
             MAX= 100,
             aggreg='mean',
             n_classes=configs.num_classes, # We don't need this for feature extraction but it's required by the model
@@ -113,36 +172,50 @@ class tf_encoder(nn.Module):
         )
 
     def forward(self, x):
-        ef, out_ft = self.freq_feature(x)
-        ef = F.relu(self.bn_freq(self.avg(ef).squeeze()))
+        # if the dataset is irregular, we use raindrop, else we use incecption time
+        if self.is_irregular:
+            # Create mask from NaN values (True for valid values, False for NaN)
+            x_mask = ~torch.isnan(x)
 
-        # --- Preprocessing for Raindrop ---
-        batch_size, channels, seq_len = x.shape
+            # Clean data by replacing NaN with very small value for frequency processing
+            x_clean = torch.where(x_mask, x, torch.full_like(x, 1e-10))
+            #x_clean = torch.where(x_mask, x, torch.zeros_like(x))
+            
+            # Get frequency features using clean data
+            ef, out_ft = self.freq_feature(x_clean)
+            ef = F.relu(self.bn_freq(self.avg(ef).squeeze()))
+            
+            # Prepare data for Raindrop
+            batch_size, channels, seq_len = x.shape
+            
+            # Permute to Raindrop's expected shape (seq_len, batch_size, channels)
+            x_raindrop = x_clean.permute(2, 0, 1)
 
-        # Permute to (seq_len, batch_size, channels)
-        x_raindrop = x.permute(2, 0, 1) 
+            # Use mask from missing values, permuted to match x_raindrop
+            mask_raindrop = x_mask.permute(2, 0, 1).float()
+            
+            # Concatenate data with real mask
+            x_raindrop = torch.cat([x_raindrop, mask_raindrop], dim=2)
+            
+            # time information
+            times = torch.arange(seq_len, device=x.device).unsqueeze(1).repeat(1, batch_size).float()
+            
+            # Calculate lengths based on non-NaN values (per sample)
+            lengths = x_mask.sum(dim=2).max(dim=1)[0]
+            
+            # No static
+            dummy_static = None
 
-        # Create dummy static data
-        dummy_static = None  # Or create a zero tensor if Raindrop requires it
+            # this now gives us [32, 136 [d_model(3 * 40) + 16] ], it's impossible to get 128 becuase of WISDM 3 channels
+            # so we project it after down to 128 with a simple nn model
+            et, _, _ = self.raindrop(x_raindrop, dummy_static, times, lengths)
+            et = self.projection(et)
+
+        else:
+            ef, out_ft = self.freq_feature(x)
+            ef = F.relu(self.bn_freq(self.avg(ef).squeeze()))
+            et = self.inception_time(x)
         
-        # Create dummy times
-        times = torch.arange(seq_len, device=x.device).unsqueeze(1).repeat(1, batch_size).float()
-        # Create lengths ( assuming no missing data for now)
-        lengths = torch.full((batch_size,), seq_len, device=x.device)
-
-        # Create dummy mask, since dataset has no missing values. concatenate with x_raindrop
-        dummy_mask = torch.zeros_like(x_raindrop)
-        x_raindrop = torch.cat([x_raindrop, dummy_mask], dim = 2)
-
-
-        # --- Raindrop Feature Extraction ---
-        # this now gives us [32, 136 [d_model(3 * 40) + 16] ], it's impossible to get 128 becuase of WISDM 3 channels
-        # so we project it after down to 128 with a simple nn model
-        et, _, _ = self.raindrop(x_raindrop, dummy_static, times, lengths)
-
-        #print(f"et shape at encoder before projection: {et.shape}")
-
-        et = self.projection(et)
 
         f = torch.concat([ef, et], -1)
         return F.normalize(f), out_ft

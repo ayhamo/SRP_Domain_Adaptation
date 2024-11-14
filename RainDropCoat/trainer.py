@@ -10,11 +10,11 @@ from functools import partial
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import f1_score
 
-from Raincoat.configs.data_model_configs import get_dataset_class
-from Raincoat.configs.hparams import get_hparams_class
 from Raincoat.algorithms.utils import fix_randomness, starting_logs
-from Raincoat.dataloader.dataloader import data_generator
 
+from configs.data_model_configs import get_dataset_class
+from configs.hparams import get_hparams_class
+from dataloader import data_generator
 from raincoat import RAINCOAT
 
 torch.backends.cudnn.benchmark = True
@@ -26,8 +26,6 @@ class cross_domain_trainer(object):
         self.dataset = args.dataset  # Selected  Dataset
         self.device = torch.device(args.device)  # device
         self.experiment_description = args.experiment_description
-
-        self.best_f1 = 0
 
         # paths
         self.home_path = os.getcwd()
@@ -42,14 +40,82 @@ class cross_domain_trainer(object):
         self.dataset_configs, self.hparams_class = self.get_configs()
 
         # Specify number of hparams
-        self.default_hparams = {
-            **self.hparams_class.train_params,
+        self.default_hparams = {**self.hparams_class.train_params}
+
+    # Since 5 indepdent runs require 20GB vram, we distrubiute it accordingly
+    def get_device(self, run_id):
+        # the device is not cpu, use cuda, otherwise go cpu
+        if self.device != torch.device('cpu'):
+            count = torch.cuda.device_count()
+            if count == 1:
+                device = torch.device('cuda:0')
+            elif count == 2:
+                # in this case, kaggle has 2 GPU , each 15GB vram
+                # each model is 4GB vram, so first 3 are assigned to cuda 0, others to cuda 1
+                # please change as much as vram is avaviable
+                if run_id % 4 < 2:
+                    device = torch.device('cuda:0')
+                else:
+                    device = torch.device('cuda:1')
+            return device
+        else:
+            return torch.device('cpu')
+
+    def train(self):
+        self.hparams = self.default_hparams
+
+        # Logging
+        self.exp_log_dir = os.path.join(self.save_dir, f"RAINCOAT ClosedSet", self.experiment_description)
+        os.makedirs(self.exp_log_dir, exist_ok=True)
+
+        scenarios = self.dataset_configs.scenarios
+        df_a = pd.DataFrame(columns=["scenario", "run_id", "accuracy", "f1"])
+        
+        # to fix cuda init error
+        multiprocessing.set_start_method('spawn')
+
+        for scenario in scenarios:
+            # Create a partial function with fixed scenario
+            run_iteration = partial(self.single_run_scenario, scenario)
+            
+            # Create a pool of workers
+            with multiprocessing.Pool(processes=self.num_runs) as pool:
+                # Run the iterations in parallel
+                results = pool.map(run_iteration, range(self.num_runs))
+
+            # Process and log results
+            for result in results:
+                log = {
+                    "scenario": result["scenario"],
+                    "run_id": result["run_id"],
+                    "accuracy": result["accuracy"],
+                    "f1": result["f1"]
+                }
+                new_row = pd.DataFrame([log])
+                df_a = pd.concat([df_a, new_row], ignore_index=True)
+
+        # Calculate average results
+        mean_acc, std_acc, mean_f1, std_f1 = self.avg_result(df_a)
+        log = {
+            "scenario": "Avg Accuracy: " + str(mean_acc),
+            "run_id": "Accuracy STD: " + str(std_acc),
+            "accuracy": "Avg F1: " + str(mean_f1),
+            "f1": "F1 STD: " + str(std_f1),
         }
 
+        new_row = pd.DataFrame([log])
+        df_a = pd.concat([df_a, new_row], ignore_index=True)
+
+        # Save results to CSV file
+        path = os.path.join(self.exp_log_dir, "average_correct.csv")
+        df_a.to_csv(path, sep=",", index=False)
 
     def single_run_scenario(self, scenario, run_id):
         src_id, trg_id = scenario
         
+        # device based on run_id
+        self.device = self.get_device(run_id)
+
         # fixing random seed
         fix_randomness(run_id)
 
@@ -60,11 +126,12 @@ class cross_domain_trainer(object):
                     self.exp_log_dir,
                     src_id,
                     trg_id,
-                    run_id,
-                )
+                    run_id,)
+        
         self.fpath = os.path.join(self.home_path, self.scenario_log_dir, "backbone.pth")
         self.cpath = os.path.join(self.home_path, self.scenario_log_dir, "classifier.pth")
         
+        # We used f1 instead of accuracy, since dataset is unbalanced
         best_f1 = 0
 
         # Load data
@@ -140,97 +207,6 @@ class cross_domain_trainer(object):
 
         return {"scenario": scenario, "run_id": run_id, "accuracy": acc, "f1": f1}
 
-    def train(self):
-        self.hparams = self.default_hparams
-
-        # Logging
-        self.exp_log_dir = os.path.join(self.save_dir, f"RAINCOAT ClosedSet", self.experiment_description)
-        os.makedirs(self.exp_log_dir, exist_ok=True)
-
-        scenarios = self.dataset_configs.scenarios
-        df_a = pd.DataFrame(columns=["scenario", "run_id", "accuracy", "f1"])
-
-        self.trg_acc_list = []
-        
-
-        for scenario in scenarios:
-            result = self.single_run_scenario(scenario, self.num_runs)
-            
-            '''
-            # Multi-process run, commented for testing new model
-            # Create a partial function with fixed scenario
-            run_iteration = partial(self.single_run_scenario, scenario)
-            
-            # Create a pool of workers
-            with multiprocessing.Pool(processes=self.num_runs) as pool:
-                # Run the iterations in parallel
-                results = pool.map(run_iteration, range(self.num_runs))
-
-            # Process and log results
-            for result in results:
-            '''
-            
-            log = {
-                "scenario": result["scenario"],
-                "run_id": result["run_id"],
-                "accuracy": result["accuracy"],
-                "f1": result["f1"]
-            }
-            new_row = pd.DataFrame([log])
-            df_a = pd.concat([df_a, new_row], ignore_index=True)
-            self.trg_acc_list.append(result['accuracy'])
-
-        # Calculate average results
-        mean_acc, std_acc, mean_f1, std_f1 = self.avg_result(df_a)
-        log = {
-            "scenario": "Avg Accuracy: " + str(mean_acc),
-            "run_id": "Accuracy STD: " + str(std_acc),
-            "accuracy": "Avg F1: " + str(mean_f1),
-            "f1": "F1 STD: " + str(std_f1),
-        }
-
-        new_row = pd.DataFrame([log])
-        df_a = pd.concat([df_a, new_row], ignore_index=True)
-
-        # Save results to CSV file
-        path = os.path.join(self.exp_log_dir, "average_correct.csv")
-        df_a.to_csv(path, sep=",", index=False)
-
-
-    def visualize(self):
-        feature_extractor = self.algorithm.feature_extractor.to(self.device)
-        feature_extractor.eval()
-        
-        self.trg_true_labels = np.array([])
-        self.trg_all_features = []
-
-        self.src_true_labels = np.array([])
-        self.src_all_features = []
-
-        with torch.no_grad():
-
-            # for data, labels in self.trg_test_dl:
-            for data, labels in self.trg_train_dl:
-                data = data.float().to(self.device)
-                labels = labels.view((-1)).long().to(self.device)
-                features, _ = feature_extractor(data)
-
-                self.trg_all_features.append(features.cpu().numpy())
-                self.trg_true_labels = np.append(
-                    self.trg_true_labels, labels.data.cpu().numpy()
-                )
-
-            for data, labels in self.src_train_dl:
-                data = data.float().to(self.device)
-                labels = labels.view((-1)).long().to(self.device)
-                features, _ = feature_extractor(data)
-
-                self.src_all_features.append(features.cpu().numpy())
-                self.src_true_labels = np.append(
-                    self.src_true_labels, labels.data.cpu().numpy()
-                )
-            self.src_all_features = np.vstack(self.src_all_features)
-            self.trg_all_features = np.vstack(self.trg_all_features)
 
     def eval(self, dataloader, final=False):
         feature_extractor = self.algorithm.feature_extractor.to(self.device)
