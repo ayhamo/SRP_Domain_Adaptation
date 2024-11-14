@@ -109,7 +109,7 @@ class Raindrop_v2(nn.Module):
 
         src = torch.repeat_interleave(src, self.d_ob, dim=-1)
         h = F.relu(src*self.R_u)
-        pe = self.pos_encoder(times)
+        pe = self.pos_encoder(times).to(self.device)
         if static is not None:
             emb = self.emb(static)
 
