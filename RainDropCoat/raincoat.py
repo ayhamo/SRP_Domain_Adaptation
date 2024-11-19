@@ -252,10 +252,10 @@ class tf_encoder(nn.Module):
         self.inception_time = Inception_time(configs).to(device)
 
         d_inp = configs.input_channels # number of input features, like WISDM x,y,z (3)
-        d_ob = 40
+        d_ob = configs.d_ob
         d_model =  d_inp * d_ob # number of expected model input features
         nhead = 4 # number of heads in multihead-attention
-        nhid = 2 * d_model # configs.mid_channels * 4 is as per CNN configs, ask here?
+        nhid = 2 * d_model # configs.mid_channels * 4 is as per CNN configs
         # ^ dimension of feedforward network model
         nlayers = 3
 
@@ -290,9 +290,8 @@ class tf_encoder(nn.Module):
             # Create mask from NaN values (True for valid values, False for NaN)
             x_mask = ~torch.isnan(x)
 
-            # Clean data by replacing NaN with very small value for frequency processing
-            x_clean = torch.where(x_mask, x, torch.full_like(x, 1e-10))
-            #x_clean = torch.where(x_mask, x, torch.zeros_like(x))
+            # Clean data by replacing NaN with zero (small value yeilds worse results) value for frequency processing
+            x_clean = torch.where(x_mask, x, torch.zeros_like(x))
             
             # Get frequency features using clean data
             ef, out_ft = self.freq_feature(x_clean)
