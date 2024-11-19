@@ -249,7 +249,7 @@ class tf_encoder(nn.Module):
         
         # Regular Time Feature Encoder
         self.cnn = CNN(configs).to(device)
-        self.inception_time = Inception_time(configs).to(device)
+        #self.inception_time = Inception_time(configs).to(device)
 
         d_inp = configs.input_channels # number of input features, like WISDM x,y,z (3)
         d_ob = configs.d_ob
