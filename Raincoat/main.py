@@ -4,7 +4,6 @@
 
 # pip3 install -r requirement.txt
 
-
 import argparse
 from trainers.trainer import cross_domain_trainer
 import pickle

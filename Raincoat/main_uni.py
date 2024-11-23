@@ -19,8 +19,7 @@ parser.add_argument('--device',                 default='cuda',                 
 args = parser.parse_args()
 
 if __name__ == "__main__":
-
+    # python main_uni.py --experiment_description WISDM --dataset WISDM --num_runs 1 --device cuda
     trainer = cross_domain_trainer(args)
     trainer.train()
-    # python main_uni.py --experiment_description WISDM --dataset WISDM --num_runs 1 --device cuda
     
