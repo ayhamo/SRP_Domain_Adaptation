@@ -28,8 +28,8 @@ class WISDM(object):
 
         # Dataset regularity
         self.make_irregular = True
-        self.is_irregular = self.make_irregular # this flag is to reduce complexity code in raincoat
         self.missing_ratio = 0.3
+        self.is_irregular = self.make_irregular # this flag is to reduce complexity code in raincoat
 
         # model configs
         self.input_channels = 3
@@ -65,8 +65,8 @@ class HAR():
 
         # Dataset regularity
         self.make_irregular = True
-        self.is_irregular = self.make_irregular # this flag is to reduce complexity code in raincoat
         self.missing_ratio = 0.3
+        self.is_irregular = self.make_irregular # this flag is to reduce complexity code in raincoat
 
         # model configs
         self.input_channels = 9
@@ -101,8 +101,8 @@ class HHAR_SA(object):  ## HHAR dataset, SAMSUNG device.
 
         # Dataset regularity
         self.make_irregular = False
-        self.is_irregular = self.make_irregular # this flag is to reduce complexity code in raincoat
         self.missing_ratio = 0.3
+        self.is_irregular = self.make_irregular # this flag is to reduce complexity code in raincoat
 
         # model configs
         self.input_channels = 3
@@ -136,9 +136,9 @@ class EEG():
         self.features_len = 1
 
         # Dataset regularity
-        self.make_irregular = False
-        self.is_irregular = self.make_irregular # this flag is to reduce complexity code in raincoat
+        self.make_irregular = True
         self.missing_ratio = 0.3
+        self.is_irregular = True # this flag is to reduce complexity code in raincoat
 
         # model configs
         self.input_channels = 1
@@ -150,4 +150,4 @@ class EEG():
 
         # change configs
         self.fraction_order = 0.4
-        self.d_ob = 120
+        self.d_ob = 60

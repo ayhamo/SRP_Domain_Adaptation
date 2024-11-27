@@ -1,4 +1,4 @@
-## Worked on by: Ayham Treter (ayhmali123@gmail.com), Aseel Al-Qazqzy (alqazqzy.asseel@gmail.com), Nicholas Yegon (yegonicholas@gmail.com), Fatemeh Motevalian Naeini (motevalian@uni-hildesheim.de)
+## Worked on by: Ayham Treter (ayhmali123@gmail.com), Aseel Al-Qazqzy (alqazqzy.asseel@gmail.com), Nicholas Yegon (yegonicholas@gmail.com), Fatemeh Motevalian Naeini (fm.motevalian@gmail.com)
 
 ## Original Authors: [Huan He](https://hehuannb.github.io/) (hehuannb@gmail.com), [Owen Queen](https://www.linkedin.com/in/owen-queen-0348561a2/), [Teddy Koker](https://teddykoker.com/), [Consuelo Cuevas](https://consuelo-cuevas.editorx.io/home), [Theodoros Tsiligkaridis](https://github.com/mims-harvard/Raindrop)(ttsili@ll.mit.edu), [Marinka Zitnik](https://zitniklab.hms.harvard.edu/) (marinka@hms.harvard.edu)
 
