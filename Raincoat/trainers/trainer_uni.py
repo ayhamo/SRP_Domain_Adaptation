@@ -228,53 +228,6 @@ class cross_domain_trainer(object):
                                          
         acc, f1, H = self.detect_private(self.trg_test_dl, dis2proto_a_test, dis2proto_c_test, tar_uni_label_test, c_list)
 
-        '''
-        -Source 3 -> Target 2:
-        All classes pass the dip test (c list dip worked).
-        H-score is good (0.35). This scenario seems to be working as intended.
-
-        -Source 3 -> Target 7:
-        All classes pass the dip test (c list dip worked).
-        Problem: H-score is 0, i suspect this due to kmean clsuter failing to cluster it, leading to bad to mask
-        
-        -Source 13 -> Target 15:
-        Class 2 fails the dip test ("Failed cc shape"). fewer than 4 datapoints in the class (no issue here)
-        Problem: H-score is 0, i suspect this due to kmean clsuter failing to cluster it, leading to bad to mask
-        
-        -Source 14 -> Target 19:
-        All classes pass the dip test (c list dip worked).
-        Problem: H-score is 0. The same issue as in previous.
-        
-        -Source 27 -> Target 28:
-        All classes pass the dip test.
-        Thresholds appear reasonable.
-        H-score is non-zero (0.165).
-        
-        Source 1 -> Target 0:
-        Classes 2 and 3 fail the dip test ("Failed cc shape").
-        Problem: H-score is not zero (0.239), so this is ok
-
-        Source 1 -> Target 3:
-        Classes 1 and 3 fail the dip test ("Failed cc shape")
-        Failed to detect private here in target in a class(dip target failed!), other one worked but
-        Problem: H-score is 0. kmeans most prob
-        
-        Source 10 -> Target 11:
-        All classes pass the dip test.
-        1 class failed detection, 2 worked but
-        Problem: H-score is 0. kmeans again
-        
-        Source 22 -> Target 17:
-        All classes pass the dip test.
-        1 class failed detection, 2 worked but
-        Problem: H-score is 0.
-        
-        Source 27 -> Target 15:
-        Class 1 fails the the cc shape
-        found private but
-        Problem: H-score is 0.
-        '''
-
         return {'scenario': scenario, 'run_id': run_id, 'accuracy': acc, 'f1': f1, 'H-score': H}
 
 
@@ -293,14 +246,14 @@ class cross_domain_trainer(object):
 
         # now we see if we have private
         diff = np.abs(d2-d1)
-        # TODO this 6 shuld be wrong?
+        # despite being wrong as pesudocode, this 6 will work with WISDM,HAR,HHAR_SA but not EEG
         for i in range(6):
             cat = np.where(self.trg_pred_labels==i)
             cc = diff[cat]
             if cc.shape[0]>3:
                 dip, pval = diptest.diptest(diff[cat])
                 # this was 0.05 (5% error), we changed to 10%
-                if dip < 0.10:
+                if pval < 0.10:
                     print(f"contain private in target with dip: {dip}")
                     c = c_list[i]
                     m1 = np.where(diff>c)
@@ -338,9 +291,8 @@ class cross_domain_trainer(object):
                 dip, pval = diptest.diptest(diff[cat])
                 # here is not enough evidence to reject the null hypothesis of unimodality at the 5% error level. 
                 # ie the data does not show strong evidence of being multimodal
-                # TODO but what is dip(direct measure of unimodality) vs pval(probabilistic measure of unimodality)?
                 # this was 0.05 (5% error), we changed to 10%
-                if dip < 0.10:
+                if pval < 0.10:
                     print(f"c list dip worked: {dip}")
                     kmeans = KMeans(n_clusters=2, random_state=0, max_iter=5000, n_init=50, init="k-means++").fit(
                         diff[cat].reshape(-1, 1))

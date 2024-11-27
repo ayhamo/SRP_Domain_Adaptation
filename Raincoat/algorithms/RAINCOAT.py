@@ -115,7 +115,7 @@ class CNN(nn.Module):
         return x_flat
 
 class tf_encoder(nn.Module):
-    def __init__(self, configs):
+    def __init__(self, configs, device):
         super(tf_encoder, self).__init__()
         self.modes1 = configs.fourier_modes   # Number of low-frequency modes to keep
         self.width = configs.input_channels
@@ -124,7 +124,7 @@ class tf_encoder(nn.Module):
 
         self.freq_feature = SpectralConv1d(self.width, self.width, self.modes1, self.fraction_order)  # Frequency Feature Encoder
         self.bn_freq = nn.BatchNorm1d(configs.fourier_modes*2)   # It doubles because frequency features contain both amplitude and phase
-        self.cnn = CNN(configs)  # Time Feature Encoder
+        self.cnn = CNN(configs).to(device)  # Time Feature Encoder
         self.avg = nn.Conv1d(self.width, 1, kernel_size=3 ,
                   stride=configs.stride, bias=False, padding=(3 // 2))
 
@@ -193,7 +193,7 @@ class classifier(nn.Module):
 class RAINCOAT(Algorithm):
     def __init__(self, configs, hparams, device):
         super(RAINCOAT, self).__init__(configs)
-        self.feature_extractor = tf_encoder(configs).to(device)
+        self.feature_extractor = tf_encoder(configs,device).to(device)
         self.decoder = tf_decoder(configs).to(device)
         self.classifier = classifier(configs).to(device)
 
