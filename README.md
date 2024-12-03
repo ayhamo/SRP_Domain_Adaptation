@@ -13,7 +13,24 @@ The transfer of models trained on labeled datasets from a source domain to unlab
 </p>
 
 ## Overview of The changes we made:
-...
+### Enhancements to RAINCOAT
+- **Fixed Architectural Issues**: added missing CNN layers, corrected loss function, and improved evaluation metrics.
+- **Introduced Fractional Fourier Transformer (FrFT)**: Enhanced the model's Fourier Transforme.
+- **Enhancment of CNN**: Replaced ReLU with Mish activation.
+- **Optimized Runtime**: Introduction of parallel processing and hyperparameter tuning (e.g., learning rate, batch size, FrFT parameter).
+
+### Integration with RAINDROP
+Raindrop is state of the art  graph-based neural network that handles irregular time series by leveraging inter-sensor
+dependencies and neural message passing to process misaligned observations and varying time
+intervals.
+
+- **Graph-Guided Neural Network**: Leveraged RAINDROP’s graph-based network to process any irregular time serise data
+- **Dynamic Data Preprocessing**: Aligned data preprocessing between RAINCOAT and RAINDROP for smooth integration and maintain original model.
+
+<br>
+<p align="center">
+<img src="Umbrella.png">
+</p>
 
 ## Installation and Setup
 
@@ -41,7 +58,7 @@ then install requirments:
 ```
 pip3 install -r requirement.txt
 ```
-and finally SRP Package
+and finally install SRP Package
 ```
 pip3 install -e .
 ```
@@ -89,11 +106,7 @@ python run.py  --experiment_description WISDM  \
 To see and/or modify the default hyperparameters, please see `configs/hparams.py` and `configs/data_model_configs.py`.
 
 ### Citation
-If you find *Umbrella* useful for your research, please consider citing our work:
-
-```
-
-```
+If you find *Umbrella* useful for your research, please consider citing our work
 
 ### Lisence
-Raincoat codebase is under MIT license. For individual dataset usage, please refer to the dataset license found in the website.
+Umbrella, Raincoat & Raindrop codebase is under MIT license. For individual dataset usage, please refer to the dataset license found in the website.

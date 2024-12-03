@@ -65,8 +65,21 @@ class WISDM2HHAR_SA():
         super(WISDM2HHAR_SA, self).__init__()
         self.train_params = {
                 'num_epochs': 450,
-                'corr_epochs': 55,
-                'batch_size': 128,
+                'corr_epochs': 150,
+                'batch_size': 32,
+                'weight_decay': 1e-4,
+                'learning_rate':0.002,
+                'scheduler_steps': 32,
+                'coscheduler_steps': 32,
+        }
+
+class HHAR_SA2WISDM():
+    def __init__(self):
+        super(HHAR_SA2WISDM, self).__init__()
+        self.train_params = {
+                'num_epochs': 450,
+                'corr_epochs': 150,
+                'batch_size': 32,
                 'weight_decay': 1e-4,
                 'learning_rate':0.002,
                 'scheduler_steps': 32,

@@ -7,7 +7,6 @@ SRP_Domain_Adaptation.egg-info/
 env/
 *.py[cod]
 *.arff
-*.png
 *.pkl
 *.xlsx
  

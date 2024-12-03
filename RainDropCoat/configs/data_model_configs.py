@@ -150,4 +150,4 @@ class EEG():
 
         # change configs
         self.fraction_order = 0.4
-        self.d_ob = 60
+        self.d_ob = 2 # any value bigger than this would require NASA computer

@@ -94,11 +94,12 @@ class WISDM(object):
 class HHAR_SA(object):  ## HHAR dataset, SAMSUNG device.
     def __init__(self):
         super(HHAR_SA, self).__init__()
+        self.class_names = ['bike', 'sit', 'stand', 'walk', 'stairs_up', 'stairs_down']
         self.sequence_len = 128
 
         self.scenarios = [("0", "2"), ("1", "6"),("2", "4"),("4", "0"),("4", "5"),\
             ("5", "1"),("5", "2"),("7", "2"),("7", "5"),("8", "4")]
-        self.class_names = ['bike', 'sit', 'stand', 'walk', 'stairs_up', 'stairs_down']
+        
         self.num_classes = 6
         self.shuffle = True
         self.drop_last = True
@@ -125,7 +126,7 @@ class WISDM2HHAR_SA(object):
         
         # UniDA        
         self.H_scenarios = [('4', '0'), ('5', '1'),('6', '2'), ('7', '3'),('17', '4'), ('18', '5'),
-                            ('19', '6'), ('20', '7'),('23', '8')]
+                            ('19', '6'), ('20', '7')] # Last scenario ('23', '8') does not even work :)
         self.num_classes = 6
         self.shuffle = True
         self.drop_last = False
@@ -141,7 +142,37 @@ class WISDM2HHAR_SA(object):
         self.kernel_size = 5
         self.stride = 1
         self.dropout = 0.5
-        self.fourier_modes = 64 #32 hhar
+        self.fourier_modes = 64
+        self.out_dim = self.final_out_channels+ self.fourier_modes * 2
+
+        # change configs
+        self.fraction_order = 0.4
+
+class HHAR_SA2WISDM(object): 
+    def __init__(self):
+        super(HHAR_SA2WISDM, self).__init__()
+        self.class_names = ['bike', 'sit', 'stand', 'walk', 'stairs_up', 'stairs_down']
+        self.sequence_len = 128
+
+        self.scenarios = [("0", "4"), ("1", "5"),("2", "6"),("3", "7"),("4", "17"),\
+            ("5", "18"),("6", "19"),("7", "20"),("8", "23")]
+        
+        self.num_classes = 6
+        self.shuffle = True
+        self.drop_last = True
+        self.normalize = True
+        self.fourier_modes = 32
+
+        # model configs
+        self.input_channels = 3
+        self.kernel_size = 5
+        self.stride = 1
+        self.dropout = 0.5
+
+        # features
+        self.mid_channels = 64 * 2
+        self.final_out_channels = 128
+        self.features_len = 1
         self.out_dim = self.final_out_channels+ self.fourier_modes * 2
 
         # change configs

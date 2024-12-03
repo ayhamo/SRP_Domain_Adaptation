@@ -138,7 +138,8 @@ class tf_encoder(nn.Module):
         d_inp = configs.input_channels # number of input features, like WISDM x,y,z (3)
         d_ob = configs.d_ob
         d_model =  d_inp * d_ob # number of expected model input features
-        nhead = 4 # number of heads in multihead-attention
+        # number of heads in multihead-attention
+        nhead = 3 if configs.__class__.__name__ == 'EEG' else 4
         nhid = 2 * d_model
         # ^ dimension of feedforward network model
         nlayers = 3
@@ -162,10 +163,12 @@ class tf_encoder(nn.Module):
             device= device
         )
         
+        down_proj = configs.final_out_channels if self.is_irregular else configs.sequence_len
+
         self.projection = nn.Sequential(
-            nn.Linear(d_model + 16, configs.sequence_len), #scale it down to seq length
+            nn.Linear(d_model + 16, down_proj), #scale it down to seq length or out_channel for EEG
             nn.ReLU(),
-            nn.BatchNorm1d(configs.sequence_len)
+            nn.BatchNorm1d(down_proj)
         )
 
     def forward(self, x):

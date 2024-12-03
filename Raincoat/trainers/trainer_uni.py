@@ -26,13 +26,20 @@ class cross_domain_trainer(object):
 
     def __init__(self, args):
         self.dataset = args.dataset  # Selected  Dataset
+        self.two_datasets = False
         self.device = torch.device(args.device)  # device
         self.experiment_description = args.experiment_description
 
         # paths
         self.home_path = os.getcwd()
         self.save_dir = args.save_dir
-        self.data_path = os.path.join(args.data_path, self.dataset)
+        self.data_path = args.data_path
+
+        if("2" in self.dataset):
+            # set a flag so that we change the data path in loading datasets
+            self.two_datasets = True
+        else:    
+            self.data_path = os.path.join(self.data_path, self.dataset)
         self.create_save_dir()
 
         # Specify runs
@@ -253,16 +260,14 @@ class cross_domain_trainer(object):
             if cc.shape[0]>3:
                 dip, pval = diptest.diptest(diff[cat])
                 # this was 0.05 (5% error), we changed to 10%
-                if pval < 0.10:
-                    print(f"contain private in target with dip: {dip}")
+                if dip < 0.10:
                     c = c_list[i]
                     m1 = np.where(diff>c)
                     m2 = np.where(self.trg_pred_labels==i)
                     mask = np.intersect1d(m1, m2)
                     # print(m1, m2, mask)
                     self.trg_pred_labels[mask] = -1
-                else:
-                    print(f"detect private target dip Failed: {dip}")
+
 
         
         # current behavoiur to not to save models and use varaibles
@@ -292,17 +297,13 @@ class cross_domain_trainer(object):
                 # here is not enough evidence to reject the null hypothesis of unimodality at the 5% error level. 
                 # ie the data does not show strong evidence of being multimodal
                 # this was 0.05 (5% error), we changed to 10%
-                if pval < 0.10:
-                    print(f"c list dip worked: {dip}")
+                if dip < 0.10:
                     kmeans = KMeans(n_clusters=2, random_state=0, max_iter=5000, n_init=50, init="k-means++").fit(
                         diff[cat].reshape(-1, 1))
                     c = max(kmeans.cluster_centers_)
-
                 else:
-                    print(f"c list dip Failed: {dip}")
                     c = 1e10
             else:
-                print(f"Failed cc shape")
                 c = 1e10
             c_list.append(c)
         return c_list
@@ -391,11 +392,23 @@ class cross_domain_trainer(object):
         hparams_class = get_hparams_class(self.dataset)
         return dataset_class(), hparams_class()
         
-    def load_data(self, src_id, trg_id): 
-        self.src_train_dl, self.src_val_dl, self.src_test_dl = data_generator(
-                self.data_path, src_id, self.dataset_configs, self.hparams)
-        self.trg_train_dl, self.trg_val_dl, self.trg_test_dl = data_generator(
-                self.data_path, trg_id, self.dataset_configs, self.hparams)
+    def load_data(self, src_id, trg_id):
+        if(self.two_datasets):
+            datasets = self.dataset.split("2")
+            data_path_1 = os.path.join(self.data_path, datasets[0])
+            data_path_2 = os.path.join(self.data_path, datasets[1])
+            # first dataset 
+            self.src_train_dl, self.src_val_dl, self.src_test_dl = data_generator(
+                    data_path_1, src_id, self.dataset_configs, self.hparams)
+            # second dataset
+            self.trg_train_dl, self.trg_val_dl, self.trg_test_dl = data_generator(
+                    data_path_2, trg_id, self.dataset_configs, self.hparams)
+        else:
+            # we only have a single dataset
+            self.src_train_dl, self.src_val_dl, self.src_test_dl = data_generator(
+                    self.data_path, src_id, self.dataset_configs, self.hparams)
+            self.trg_train_dl, self.trg_val_dl, self.trg_test_dl = data_generator(
+                    self.data_path, trg_id, self.dataset_configs, self.hparams)
         
     def create_save_dir(self):
         if not os.path.exists(self.save_dir):
