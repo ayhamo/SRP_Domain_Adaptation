@@ -1,8 +1,0 @@
-Pandas
-scikit-learn
-pytorch_metric_learning
-skorch
-matplotlib
-seaborn
-diptest
-ipykernel

@@ -2,11 +2,11 @@
 __pycache__/
 
 experiments_logs/
+SRP_Domain_Adaptation.egg-info/
 **/*.ipynb_checkpoints/
 env/
 *.py[cod]
 *.arff
-*.png
 *.pkl
 *.xlsx
  
